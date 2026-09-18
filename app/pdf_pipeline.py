@@ -100,6 +100,41 @@ def _pymupdf_doc(path: Path):
             return None
 
 
+LOGGER = logging.getLogger("jarbas.pdf")
+
+
+class FalhaDeMotor(Exception):
+    """Um motor de leitura falhou. Os outros continuam valendo."""
+
+
+def _isolar(fn, *args, **kwargs):
+    """Executa um motor de PDF sem deixar que a falha dele derrube os demais.
+
+    `except Exception` NÃO basta aqui. Bibliotecas de PDF carregam extensões
+    nativas — o pypdf importa `cryptography`, que é Rust via pyo3 — e uma
+    extensão nativa quebrada levanta PanicException, que herda de
+    BaseException, não de Exception. O guarda passava ao largo e a extração
+    inteira morria.
+
+    O efeito prático era o pior possível: o pypdf só é chamado quando o
+    PyMuPDF não conseguiu texto suficiente, ou seja, exatamente nos PDFs
+    digitalizados. Numa instalação com dependência nativa meio quebrada — um
+    pip que falhou pela metade, antivírus que bloqueou uma DLL — todo auto
+    escaneado derrubava a leitura, e a tela dizia apenas que o PDF não foi
+    lido, sem explicar que um dos motores estava inutilizável.
+
+    KeyboardInterrupt e SystemExit sobem: são ordem de parar, não falha de
+    motor.
+    """
+    try:
+        return fn(*args, **kwargs)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:
+        LOGGER.warning("motor de PDF falhou (%s): %s", fn.__name__, exc)
+        raise FalhaDeMotor(str(exc)[:200]) from exc
+
+
 def _extract_pymupdf_page(doc, idx: int) -> str:
     if doc is None:
         return ""
@@ -293,10 +328,18 @@ def extract_pdf(
     pypdf_reader = None
     pypdf_count = 0
     pypdf_encrypted = False
+    pypdf_indisponivel = ""
+    # Motores que falharam nesta leitura, para a nota explicar o que aconteceu
+    # em vez de só dizer que o PDF não foi lido.
+    motores_falhos: dict[str, str] = {}
     # Só precisamos abrir pypdf para descobrir contagem quando PyMuPDF falhou,
     # ou como fallback de páginas fracas. Abrir uma vez evita custo por página.
     if pymu_count <= 0:
-        pypdf_reader, pypdf_count, pypdf_encrypted = _make_pypdf_reader(path)
+        try:
+            pypdf_reader, pypdf_count, pypdf_encrypted = _isolar(_make_pypdf_reader, path)
+        except FalhaDeMotor as exc:
+            pypdf_indisponivel = str(exc)
+            motores_falhos["pypdf"] = pypdf_indisponivel
     page_count = max(pymu_count, pypdf_count)
     if page_count <= 0:
         if pymu is not None:
@@ -322,25 +365,48 @@ def extract_pdf(
 
     for idx in indexes:
         candidates: list[tuple[str, str]] = []
-        py_text = _extract_pymupdf_page(pymu, idx)
+        try:
+            py_text = _isolar(_extract_pymupdf_page, pymu, idx)
+        except FalhaDeMotor as exc:
+            py_text = ""
+            motores_falhos.setdefault("pymupdf", str(exc))
         candidates.append(("pymupdf", py_text))
         engine, text = _choose_best(candidates)
 
         if not _good_enough(text):
             fallback_pages += 1
-            if pypdf_reader is None:
-                pypdf_reader, pypdf_count, pypdf_encrypted = _make_pypdf_reader(path)
-            pypdf_text = _extract_pypdf_page(pypdf_reader, idx)
-            candidates.append(("pypdf", pypdf_text))
+            if pypdf_reader is None and not pypdf_indisponivel:
+                try:
+                    pypdf_reader, pypdf_count, pypdf_encrypted = _isolar(_make_pypdf_reader, path)
+                except FalhaDeMotor as exc:
+                    # Uma vez indisponível, sempre indisponível nesta leitura:
+                    # sem isso o erro se repetiria em cada página do documento.
+                    pypdf_indisponivel = str(exc)
+                    motores_falhos["pypdf"] = pypdf_indisponivel
+            if pypdf_reader is not None:
+                try:
+                    pypdf_text = _isolar(_extract_pypdf_page, pypdf_reader, idx)
+                except FalhaDeMotor as exc:
+                    pypdf_text = ""
+                    motores_falhos.setdefault("pypdf", str(exc))
+                candidates.append(("pypdf", pypdf_text))
             engine, text = _choose_best(candidates)
 
         if not _good_enough(text):
-            plumber_text = _extract_pdfplumber_page(path, idx)
+            try:
+                plumber_text = _isolar(_extract_pdfplumber_page, path, idx)
+            except FalhaDeMotor as exc:
+                plumber_text = ""
+                motores_falhos.setdefault("pdfplumber", str(exc))
             candidates.append(("pdfplumber", plumber_text))
             engine, text = _choose_best(candidates)
 
         if allow_local_ocr and len(_clean(text)) < 35:
-            ocr_text = _try_pymupdf_ocr(pymu, idx)
+            try:
+                ocr_text = _isolar(_try_pymupdf_ocr, pymu, idx)
+            except FalhaDeMotor as exc:
+                ocr_text = ""
+                motores_falhos.setdefault("ocr", str(exc))
             if _quality(ocr_text) > _quality(text):
                 engine, text = "tesseract_ocr", _clean(ocr_text)
                 ocr_pages += 1
@@ -389,6 +455,14 @@ def extract_pdf(
         note_parts.append("Há páginas sem texto suficiente. Com a chave da Anthropic configurada, o Copiloto lê essas páginas direto do PDF original.")
     if max_pages and page_count > sampled:
         note_parts.append(f"Prévia amostral: {sampled} de {page_count} páginas.")
+    if motores_falhos:
+        # Sem esta linha, uma dependência quebrada fica invisível: a tela diz
+        # que o PDF não foi lido e ninguém descobre que faltava um motor.
+        quais = ", ".join(f"{nome} ({erro[:80]})" for nome, erro in motores_falhos.items())
+        note_parts.append(
+            f"ATENÇÃO: motor(es) de leitura indisponível(is) nesta instalação: {quais}. "
+            "A leitura seguiu com os motores restantes. Rode DIAGNOSTICAR_PDF.cmd "
+            "e reinstale as dependências se o problema persistir.")
 
     return PDFExtraction(
         pages=pages,
