@@ -130,3 +130,14 @@ def test_nenhum_segredo_vazou_para_o_pacote():
 
 def test_nenhum_pycache_no_pacote():
     assert not list(PKG.rglob("__pycache__")), "__pycache__ quebra o manifesto"
+
+
+def test_o_pacote_sai_sem_bytecode_compilado():
+    """Conferir o pacote rodando a suíte dentro dele deixava .pyc para trás.
+
+    São compilados para a versão de Python de quem montou, não a do
+    escritório, e entram no pacote como lixo que ninguém pediu — inclusive
+    depois do manifesto, portanto sem serem conferidos por ele.
+    """
+    sobras = [p for p in PKG.rglob("*") if "__pycache__" in p.parts or p.suffix in (".pyc", ".pyo")]
+    assert not sobras, "bytecode no pacote:\n" + "\n".join(str(s) for s in sobras[:10])

@@ -106,10 +106,21 @@ def montar(destino: Path) -> Path:
     if leia.is_file():
         shutil.copy2(leia, destino / "LEIA_PRIMEIRO.txt")
 
-    # 7. Carimbo do build ANTES do manifesto, para entrar nele.
+    # 7. Limpeza antes de carimbar e conferir.
+    #
+    # Rodar a suíte DE DENTRO do pacote — que é justamente como se confere um
+    # pacote antes de enviá-lo — deixa __pycache__ para trás. Esses .pyc são
+    # compilados para a versão de Python de quem montou, não a do escritório,
+    # e entram no pacote como lixo que ninguém pediu.
+    for lixo in list(destino.rglob("__pycache__")):
+        shutil.rmtree(lixo, ignore_errors=True)
+    for pyc in list(destino.rglob("*.py[co]")):
+        pyc.unlink(missing_ok=True)
+
+    # 8. Carimbo do build ANTES do manifesto, para entrar nele.
     _gravar_carimbo(destino)
 
-    # 8. Manifesto — caminhos relativos com barra invertida (Join-Path do Windows)
+    # 9. Manifesto — caminhos relativos com barra invertida (Join-Path do Windows)
     _gravar_manifesto(destino)
 
     return destino
