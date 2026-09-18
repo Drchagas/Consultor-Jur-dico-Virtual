@@ -1,0 +1,135 @@
+{% extends "base.html" %}{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">Diretrizes JARBAS V3.5 · §14 atendimento · §15 agenda · §3 risco · §17 LGPD</span>
+    <h1>Atendimento JARBAS</h1>
+    <p>Triagem da primeira conversa: identifica a área, classifica o risco, pergunta só o necessário e propõe horário que existe na agenda. Nada aqui é orientação jurídica definitiva.</p>
+  </div>
+  <span class="ai-status {{ 'on' if ia_ativa else 'off' }}">{{ 'IA Claude ativa' if ia_ativa else 'Modo roteiro — sem IA' }}</span>
+</div>
+
+{% if erro %}<div class="alert danger">{{ erro }}</div>{% endif %}
+{% if ok %}<div class="alert success-box">{{ ok }}</div>{% endif %}
+{% if not ia_ativa %}<div class="alert warning-box">A chave da Anthropic não está configurada. O atendimento segue funcionando pelo <strong>roteiro</strong> — triagem, perguntas da área, horários e valor da consulta. <a href="/settings">Configurar a IA</a> melhora a redação, não o serviço.</div>{% endif %}
+
+<div class="grid2 ai-layout">
+  <section class="panel">
+    <div class="panel-head"><h2>Novo atendimento</h2><span>{{ conversas|length }} na fila</span></div>
+    <form method="post" action="/atendimento/nova" class="form-stack">
+      <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+      <label>Nome do contato<input name="contato_nome" placeholder="Como a pessoa se apresentou"></label>
+      <div class="form-grid2">
+        <label>Telefone/Whats<input name="contato_telefone" placeholder="(54) 9xxxx-xxxx"></label>
+        <label>E-mail<input name="contato_email" type="email" placeholder="opcional"></label>
+      </div>
+      <label>Canal<select name="canal">{% for c in canais %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></label>
+      <label>Observações internas<textarea name="observacoes" placeholder="Contexto que o JARBAS deve considerar. Não entra na resposta ao cliente."></textarea></label>
+      <button>Abrir atendimento</button>
+    </form>
+
+    <h3>Fila por risco</h3>
+    {% for c in conversas %}
+      <a class="list-row link" href="/atendimento?conversa={{ c['id'] }}">
+        <div>
+          <strong>{{ c['contato_nome'] or 'Contato sem nome' }}</strong>
+          <small>{{ c['canal'] }} · {{ c['updated_at']|datahora }}{% if c['area'] %} · {{ c['area'] }}{% endif %}</small>
+        </div>
+        <span class="badge {{ (c['risco'] or 'medio')|lower|replace('í','i')|replace('é','e') }}">{{ c['risco'] or '—' }}{% if c['status'] != 'aberto' %} · {{ c['status'] }}{% endif %}</span>
+      </a>
+    {% else %}
+      <p class="empty">Nenhum atendimento aberto. Crie um ao lado e cole a mensagem que o cliente mandou.</p>
+    {% endfor %}
+  </section>
+
+  <section class="panel ai-chat">
+  {% if conversa %}
+    <div class="panel-head">
+      <div>
+        <span class="eyebrow">Atendimento #{{ conversa['id'] }} · {{ conversa['canal'] }}</span>
+        <h2>{{ conversa['contato_nome'] or 'Contato sem nome' }}</h2>
+      </div>
+      <span class="badge {{ (conversa['risco'] or 'medio')|lower|replace('í','i')|replace('é','e') }}">{{ conversa['risco'] or 'não classificado' }}</span>
+    </div>
+
+    {% if classificacao %}
+    <div class="triagem-box">
+      <div><span>Fluxo</span><b>{{ classificacao.fluxo }}</b></div>
+      <div><span>Área</span><b>{{ classificacao.area.nome }}</b></div>
+      <div><span>Risco</span><b>{{ classificacao.risco }}</b></div>
+      <div><span>Skill JARBAS</span><b>{{ classificacao.area.skill }}</b></div>
+    </div>
+    {% if classificacao.motivos %}<p class="caution">Motivo da classificação: {{ classificacao.motivos|join('; ') }}.</p>{% endif %}
+    {% if classificacao.processo %}<p class="caution">Processo citado pelo contato: {{ classificacao.processo }} — confira nos autos antes de responder sobre andamento.</p>{% endif %}
+    {% endif %}
+
+    <div class="chat-stream">
+      {% for m in mensagens %}
+        <div class="chat-msg {{ m['role'] }}">
+          <span>{{ 'JARBAS' if m['role'] == 'assistant' else 'Contato' }}</span>
+          <div>{{ m['content'] }}</div>
+          {% for a in m['alertas'] %}<small class="warning">⚠ {{ a }}</small>{% endfor %}
+          <small>{{ m['created_at']|datahora }}{% if m['model'] %} · {{ m['model'] }}{% endif %}</small>
+        </div>
+      {% else %}
+        <p class="empty">Cole abaixo a mensagem que o cliente enviou. O JARBAS responde com a triagem da área e os horários livres.</p>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="/atendimento/{{ conversa['id'] }}/mensagem" class="chat-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+      <textarea name="mensagem" placeholder="O que o cliente escreveu. Deixe em branco e use 'Responder pelo roteiro' para gerar um follow-up."></textarea>
+      <div class="action-row">
+        <button>Gerar resposta</button>
+        <button class="secondary" name="roteiro" value="1">Responder pelo roteiro (sem IA)</button>
+      </div>
+    </form>
+
+    <div class="action-row separated">
+      <form method="post" action="/atendimento/{{ conversa['id'] }}/lead"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="secondary">Encaminhar ao CRM</button></form>
+      <form method="post" action="/atendimento/{{ conversa['id'] }}/encerrar"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><input type="hidden" name="status" value="encerrado"><button class="secondary">Encerrar</button></form>
+      <form method="post" action="/atendimento/{{ conversa['id'] }}/encerrar"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><input type="hidden" name="status" value="aberto"><button class="secondary">Reabrir</button></form>
+    </div>
+
+    {% if conversa['resumo'] %}<div class="safe-note"><strong>Resumo para o advogado</strong> (dados diretos mascarados): {{ conversa['resumo'] }}</div>{% endif %}
+    <div class="disclaimer">{{ aviso_revisao }}<br>{{ aviso_lgpd }}</div>
+  {% else %}
+    <div class="ai-empty">
+      <strong>Selecione ou abra um atendimento.</strong>
+      <p>O JARBAS não inventa andamento, não promete resultado e não estipula honorários do serviço — só a consulta de {{ valor_consulta|moeda }}.</p>
+    </div>
+  {% endif %}
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="panel">
+    <div class="panel-head"><h2>Agenda</h2><span>dias úteis · 8h às 17h · 60 min</span></div>
+    <p class="muted">Próximos horários livres na janela da diretriz §15. São estes — e só estes — que o chatbot pode oferecer.</p>
+    <div class="source-list">{% for h in horarios %}<span>{{ h }}</span>{% else %}<span>nenhum horário na janela padrão</span>{% endfor %}</div>
+    <h3>Modalidades</h3>
+    <ul class="muted">{% for m in modalidades %}<li>{{ m }}</li>{% endfor %}</ul>
+    <h3>Consulta</h3>
+    <p>{{ valor_consulta|moeda }} por 60 minutos, abatível dos honorários em caso de contratação. O orçamento do serviço sai depois da consulta, com base na Tabela OAB/RS.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Áreas atendidas na triagem</h2><span>{{ areas|length }} áreas</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Área</th><th>Risco mínimo</th><th>Skill JARBAS</th></tr></thead>
+        <tbody>{% for a in areas %}<tr><td>{{ a.nome }}<small class="block">{{ a.perguntas|length }} perguntas de triagem · {{ a.documentos|length }} documentos sugeridos</small></td><td>{{ a.risco_minimo }}</td><td>{{ a.skill }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="panel">
+  <div class="feature-list">
+    <div><b>Zero invenção</b><span>o chatbot não cita jurisprudência, súmula, processo ou doutrina no atendimento, e o texto produzido é relido atrás de promessa de resultado, promessa de prazo judicial e valor inventado</span></div>
+    <div><b>Risco</b><span>prisão, flagrante, medida protetiva, prazo vencendo e leilão marcado sobem a conversa para o topo da fila e acionam o advogado fora da ordem normal</span></div>
+    <div><b>LGPD</b><span>só o necessário à triagem; o resumo que vai ao CRM tem CPF, CNPJ, telefone, e-mail e cartão mascarados</span></div>
+    <div><b>Revisão humana</b><span>nenhuma resposta é enviada sozinha ao cliente; o texto é minuta e sai daqui para conferência do {{ escritorio['advogado'] }}</span></div>
+  </div>
+  <div class="safe-note">{{ rodape }}</div>
+</div>
+{% endblock %}

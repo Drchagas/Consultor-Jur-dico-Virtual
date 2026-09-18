@@ -1314,6 +1314,7 @@ def initialize_schema(conn: Connection) -> None:
     conn.executescript(V87_POSTGRES_EXTRA if IS_POSTGRES else V87_SQLITE_EXTRA)
     conn.executescript(V88_POSTGRES_EXTRA if IS_POSTGRES else V88_SQLITE_EXTRA)
     conn.executescript(V89_POSTGRES_EXTRA if IS_POSTGRES else V89_SQLITE_EXTRA)
+    conn.executescript(CHATBOT_POSTGRES_EXTRA if IS_POSTGRES else CHATBOT_SQLITE_EXTRA)
     ensure_column(conn, "plans", "ai_tier TEXT")
     ensure_column(conn, "plans", "monthly_ai_usd " + ("DOUBLE PRECISION" if IS_POSTGRES else "REAL"))
     ensure_column(conn, "subscriptions", "provider TEXT")
@@ -1345,6 +1346,7 @@ def initialize_schema(conn: Connection) -> None:
 TABELAS_COM_TENANT = [
     "clients", "cases", "case_documents", "document_pages", "document_chunks",
     "drafts", "copilot_runs", "ai_council_runs", "usage_ledger",
+    "chat_conversations", "chat_messages",
 ]
 
 
@@ -1452,3 +1454,92 @@ COLUNAS_DEADLINES = [
     "source TEXT",               # manual | intake | datajud
     "movement_id INTEGER",       # movimentação que originou o prazo
 ]
+
+
+# --------------------------------------------------------------------------
+# Atendimento JARBAS — o chatbot do escritório (tela /atendimento).
+#
+# Duas tabelas, pelo mesmo motivo de sempre: a conversa é o registro que o
+# advogado lê; a mensagem é o que foi dito. Guardar só o resumo perderia a
+# transcrição, e a transcrição é o que sustenta a abertura do caso depois.
+#
+# `risco`, `area` e `fluxo` ficam desnormalizados na conversa de propósito:
+# a fila de atendimento é ordenada por risco, e ordenar por um campo que só
+# existe dentro do texto da última mensagem não é fila, é varredura.
+# --------------------------------------------------------------------------
+
+CHATBOT_SQLITE_EXTRA = r"""
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    user_id INTEGER,
+    client_id INTEGER,
+    lead_id INTEGER,
+    canal TEXT NOT NULL DEFAULT 'whatsapp',
+    contato_nome TEXT,
+    contato_telefone TEXT,
+    contato_email TEXT,
+    fluxo TEXT,
+    area TEXT,
+    risco TEXT,
+    status TEXT NOT NULL DEFAULT 'aberto',
+    resumo TEXT,
+    observacoes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_conv_org ON chat_conversations(organization_id,updated_at);
+CREATE INDEX IF NOT EXISTS idx_chat_conv_status ON chat_conversations(organization_id,status,risco);
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    model TEXT,
+    alertas TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_conv ON chat_messages(organization_id,conversation_id,id);
+"""
+
+CHATBOT_POSTGRES_EXTRA = r"""
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id BIGSERIAL PRIMARY KEY,
+    organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id BIGINT,
+    client_id BIGINT,
+    lead_id BIGINT,
+    canal TEXT NOT NULL DEFAULT 'whatsapp',
+    contato_nome TEXT,
+    contato_telefone TEXT,
+    contato_email TEXT,
+    fluxo TEXT,
+    area TEXT,
+    risco TEXT,
+    status TEXT NOT NULL DEFAULT 'aberto',
+    resumo TEXT,
+    observacoes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_conv_org ON chat_conversations(organization_id,updated_at);
+CREATE INDEX IF NOT EXISTS idx_chat_conv_status ON chat_conversations(organization_id,status,risco);
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id BIGSERIAL PRIMARY KEY,
+    organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    conversation_id BIGINT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    model TEXT,
+    alertas TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_conv ON chat_messages(organization_id,conversation_id,id);
+"""

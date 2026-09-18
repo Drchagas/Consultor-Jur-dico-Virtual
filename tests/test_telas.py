@@ -142,7 +142,7 @@ TELAS = [
     "/", "/clients", "/cases", "/documents", "/prazos", "/prazos/simular",
     "/agenda", "/crm", "/finance", "/finance/chart", "/timesheet", "/reports",
     "/audit", "/team", "/settings", "/settings/2fa", "/billing", "/platform",
-    "/intake", "/conselho", "/ai", "/produto", "/health", "/robots.txt",
+    "/intake", "/conselho", "/ai", "/atendimento", "/produto", "/health", "/robots.txt",
     "/search?q=silva",
 ]
 

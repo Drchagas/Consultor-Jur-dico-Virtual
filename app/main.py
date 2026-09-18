@@ -3050,3 +3050,7 @@ app.include_router(billing_router)
 # JARBAS 8.9 — prazos processuais.
 from .prazo_routes import router as prazo_router
 app.include_router(prazo_router)
+
+# Atendimento JARBAS — chatbot de triagem do escritório.
+from .chatbot_routes import router as chatbot_router
+app.include_router(chatbot_router)

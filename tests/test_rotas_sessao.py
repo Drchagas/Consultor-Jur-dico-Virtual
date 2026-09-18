@@ -33,7 +33,8 @@ MAIN = (APP / "main.py").read_text(encoding="utf-8")
 
 GUARDA = re.compile(r"isinstance\(\s*org\s*,\s*RedirectResponse\s*\)")
 USO = re.compile(r"\b(?:user|org)\s*\[")
-MODULOS = ("main.py", "v7.py", "council_routes.py", "billing_routes.py")
+MODULOS = ("main.py", "v7.py", "council_routes.py", "billing_routes.py",
+           "prazo_routes.py", "chatbot_routes.py")
 
 
 # v7.py usa _org_user(), que apenas repassa require_workspace.
