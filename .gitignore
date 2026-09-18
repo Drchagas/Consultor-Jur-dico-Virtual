@@ -11,3 +11,8 @@ runtime/
 venv/
 CREDENCIAIS_INICIAIS.txt
 .DS_Store
+
+# Rodas baixadas por build_installer.py --com-dependencias. São artefatos de
+# terceiros, dezenas de MB, que envelheceriam junto com o histórico do git.
+vendor/
+*.whl

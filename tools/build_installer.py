@@ -14,7 +14,15 @@ Layout de fonte              ->  Layout de distribuição
   tools/  scripts/                tools/  scripts/  (iguais)
   SHA256SUMS.txt                  PACOTE_MANIFEST_SHA256.txt
 
-Uso:  python tools/build_installer.py [destino]
+Uso:  python tools/build_installer.py [destino] [--com-dependencias]
+
+`--com-dependencias` baixa as rodas (.whl) de Windows/Python 3.12 para dentro
+do pacote, em vendor/wheels. O instalador passa a instalar sem internet.
+
+As rodas NÃO ficam versionadas no repositório: são artefatos de terceiros, de
+dezenas de MB, que envelheceriam junto com o histórico. Baixá-las no momento
+da montagem mantém o repositório limpo e garante que o pacote leve exatamente
+as versões fixadas em requirements.txt.
 """
 
 from __future__ import annotations
@@ -99,6 +107,12 @@ def montar(destino: Path) -> Path:
         shutil.copy2(leia, destino / "LEIA_PRIMEIRO.txt")
 
     # 7. Manifesto — caminhos relativos com barra invertida (Join-Path do Windows)
+    _gravar_manifesto(destino)
+
+    return destino
+
+
+def _gravar_manifesto(destino: Path) -> None:
     linhas = []
     for p in sorted(destino.rglob("*")):
         if not p.is_file() or p.name == "PACOTE_MANIFEST_SHA256.txt":
@@ -109,7 +123,45 @@ def montar(destino: Path) -> Path:
     (destino / "PACOTE_MANIFEST_SHA256.txt").write_text(
         "\r\n".join(linhas) + "\r\n", encoding="utf-8")
 
-    return destino
+
+def baixar_dependencias(destino: Path) -> int:
+    """Baixa as rodas de Windows/Python 3.12 para vendor/wheels.
+
+    --only-binary=:all: é deliberado: uma roda pré-compilada instala sem
+    compilador. Permitir sdist aqui produziria um pacote que, na máquina do
+    escritório, tentaria compilar C e falharia — exatamente o que este modo
+    existe para evitar.
+    """
+    import subprocess
+
+    alvo = destino / "vendor" / "wheels"
+    alvo.mkdir(parents=True, exist_ok=True)
+    total = 0
+    for req in ("requirements.txt", "requirements-ia.txt"):
+        arquivo = RAIZ / req
+        if not arquivo.is_file():
+            continue
+        opcional = req.endswith("-ia.txt")
+        print(f"  baixando {req}...")
+        r = subprocess.run(
+            [sys.executable, "-m", "pip", "download", "--quiet",
+             "--dest", str(alvo),
+             "--platform", "win_amd64", "--python-version", "3.12",
+             "--only-binary=:all:", "-r", str(arquivo)],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            if opcional:
+                # Mesmo critério do instalador: sem SDK de IA o sistema opera.
+                print(f"  AVISO: {req} não resolveu; o pacote sai sem as funções de IA.")
+                print(f"         {r.stderr.strip()[:300]}")
+                continue
+            print(f"  FALHA ao baixar {req}:\n{r.stderr.strip()[:600]}")
+            return 1
+    rodas = sorted(alvo.glob("*.whl"))
+    total = sum(p.stat().st_size for p in rodas)
+    print(f"  {len(rodas)} rodas, {total/1024/1024:.1f} MB")
+    return 0 if rodas else 1
 
 
 def conferir(destino: Path) -> int:
@@ -146,8 +198,22 @@ def conferir(destino: Path) -> int:
 
 
 if __name__ == "__main__":
-    alvo = Path(sys.argv[1]) if len(sys.argv) > 1 else RAIZ.parent / f"JARBAS_Instalador_{VERSAO.replace('.', '_')}"
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    com_deps = "--com-dependencias" in sys.argv
+    alvo = Path(args[0]) if args else RAIZ.parent / f"JARBAS_Instalador_{VERSAO.replace('.', '_')}"
+
     print(f"Montando pacote de instalação {VERSAO} em {alvo}")
     montar(alvo)
+
+    if com_deps:
+        print("Baixando dependências para dentro do pacote:")
+        if baixar_dependencias(alvo) != 0:
+            print("FALHA: não foi possível montar o pacote com dependências.")
+            sys.exit(1)
+        # O manifesto é refeito DEPOIS das rodas, senão o passo [1/19] do
+        # instalador acusaria arquivo fora do manifesto e abortaria.
+        print("Refazendo o manifesto com as dependências incluídas...")
+        _gravar_manifesto(alvo)
+
     print("Conferindo integridade (mesma checagem do passo [1/19]):")
     sys.exit(1 if conferir(alvo) else 0)

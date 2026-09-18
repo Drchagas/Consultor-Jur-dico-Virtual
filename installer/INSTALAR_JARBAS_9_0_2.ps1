@@ -108,13 +108,33 @@ try{
   Say '[6/19] Preparando pip e dependencias fixadas...' Cyan
   $pipOk=$false;try{& $Python -m pip --version *> $null;if($LASTEXITCODE -eq 0){$pipOk=$true}}catch{}
   if(-not $pipOk){$gp=Join-Path $DownloadDir 'get-pip.py';if(-not(Test-Path $gp)){Download-File 'https://bootstrap.pypa.io/get-pip.py' $gp};& $Python $gp --disable-pip-version-check --no-warn-script-location;if($LASTEXITCODE -ne 0){throw 'Falha ao instalar pip no runtime.'}}
-  $env:PIP_DISABLE_PIP_VERSION_CHECK='1';$env:PIP_NO_PYTHON_VERSION_WARNING='1';& $Python -m pip install -r (Join-Path $InstallDir 'requirements.txt') --prefer-binary --retries 5 --timeout 90 --no-warn-script-location;if($LASTEXITCODE -ne 0){throw 'Falha ao instalar dependencias. Verifique internet, proxy/antivirus e execute o diagnostico.'}
+  $env:PIP_DISABLE_PIP_VERSION_CHECK='1';$env:PIP_NO_PYTHON_VERSION_WARNING='1'
+  # Dependencias embutidas no pacote, quando existirem.
+  #
+  # Baixar do PyPI na hora da instalacao e o passo que mais falha na maquina
+  # do escritorio: proxy corporativo, antivirus que inspeciona HTTPS, internet
+  # instavel. Com as rodas dentro do pacote a instalacao nao depende da rede —
+  # e, por serem exatamente as versoes fixadas no requirements.txt, instala o
+  # mesmo conjunto que foi testado, e nao o que o PyPI servir naquele dia.
+  $Rodas=Join-Path $SourceDir 'vendor\wheels'
+  $depsOk=$false
+  if(Test-Path $Rodas){
+    Say 'Instalando dependencias do proprio pacote (sem internet)...' Cyan
+    & $Python -m pip install --no-index --find-links "$Rodas" -r (Join-Path $InstallDir 'requirements.txt') --no-warn-script-location
+    if($LASTEXITCODE -eq 0){$depsOk=$true;Say 'Dependencias instaladas a partir do pacote.' Green}
+    else{Say 'As dependencias do pacote nao serviram; tentando baixar do PyPI...' Yellow}
+  }
+  if(-not $depsOk){
+    & $Python -m pip install -r (Join-Path $InstallDir 'requirements.txt') --prefer-binary --retries 5 --timeout 90 --no-warn-script-location
+    if($LASTEXITCODE -ne 0){throw 'Falha ao instalar dependencias. Verifique internet, proxy/antivirus e execute o diagnostico.'}
+  }
   # Conselho tri-IA: dependencias OPCIONAIS. Falha aqui NAO aborta a instalacao —
   # o sistema roda sem o provedor correspondente e /conselho informa qual falta.
   $ReqIA=Join-Path $InstallDir 'requirements-ia.txt'
   if(Test-Path $ReqIA){
     Say 'Instalando SDKs do Conselho tri-IA (opcional)...' DarkGray
-    & $Python -m pip install -r $ReqIA --prefer-binary --retries 3 --timeout 90 --no-warn-script-location
+    if(Test-Path $Rodas){& $Python -m pip install --no-index --find-links "$Rodas" -r $ReqIA --no-warn-script-location}
+    if($LASTEXITCODE -ne 0 -or -not(Test-Path $Rodas)){& $Python -m pip install -r $ReqIA --prefer-binary --retries 3 --timeout 90 --no-warn-script-location}
     if($LASTEXITCODE -ne 0){
       Say 'AVISO: os SDKs de Anthropic/Google nao foram instalados.' Yellow
       Say 'O JARBAS funciona normalmente; o Conselho ficara limitado aos provedores disponiveis.' Yellow
