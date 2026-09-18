@@ -18,7 +18,7 @@
         <div><strong>{{ organization['brand_name'] or organization['name'] }}</strong><small>Workspace JARBAS</small></div>
       {% endif %}
     </div>
-    <div class="product-name"><strong>JARBAS</strong> Jurídico <span>8.3.1 · ENTERPRISE</span></div>
+    <div class="product-name"><strong>JARBAS</strong> Jurídico <span>{{ app_version }} · ENTERPRISE</span></div>
     <nav class="side-nav">
       <a href="/">⌂ <span>Dashboard</span></a>
       <a href="/intake">✦ <span>Intake Inteligente</span></a>
@@ -46,7 +46,7 @@
       <strong>{{ credits_left }} créditos</strong>
       <small>restantes neste mês</small>
       {% endif %}
-      <div class="ai-mini {{ 'on' if office_ai_connected else 'off' }}">{{ 'IA OpenAI conectada' if office_ai_connected else 'IA externa não configurada' }}</div>
+      <div class="ai-mini {{ 'on' if office_ai_connected else 'off' }}">{{ 'IA Claude conectada' if office_ai_connected else 'IA externa não configurada' }}</div>
     </div>
   </aside>
   <section class="workspace">
@@ -64,7 +64,7 @@
       </div>
     </header>
     <main class="content">{% block content %}{% endblock %}</main>
-    <footer>JARBAS Jurídico 8.3.1 · gestão integrada + copiloto jurídico + IA · {{ organization['name'] }}</footer>
+    <footer>JARBAS Jurídico {{ app_version }} · gestão integrada + copiloto jurídico + IA · {{ organization['name'] }}</footer>
   </section>
 </div>
 {% else %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}{% block title %}Verificação em duas etapas · JARBAS Jurídico{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">Segurança da conta</span>
+    <h1>Verificação em duas etapas</h1>
+    <p>Segundo fator TOTP, compatível com Google Authenticator, Authy, 1Password e Microsoft Authenticator.</p>
+  </div>
+  <span class="ai-status {{ 'on' if ativo else 'off' }}">{{ 'Ativo' if ativo else 'Não configurado' }}</span>
+</div>
+
+{% if obrigatorio and not ativo %}
+<div class="alert danger">
+  <strong>Configuração obrigatória.</strong> Este escritório exige verificação em duas etapas.
+  O acesso às demais telas fica liberado assim que você concluir a ativação abaixo.
+</div>
+{% endif %}
+
+{% if error == 'codigo' %}<div class="alert danger">Código inválido, expirado ou já utilizado. Confira o relógio do celular e tente o código seguinte.</div>{% endif %}
+{% if error == 'senha' %}<div class="alert danger">Senha atual incorreta.</div>{% endif %}
+{% if error == 'obrigatorio' %}<div class="alert danger">O escritório exige verificação em duas etapas. Não é possível desativar.</div>{% endif %}
+{% if error == 'inativo' %}<div class="alert danger">A verificação em duas etapas não está ativa nesta conta.</div>{% endif %}
+{% if saved == 'ativado' %}<div class="alert success-box">Verificação em duas etapas ativada.</div>{% endif %}
+{% if saved == 'desativado' %}<div class="alert warning-box">Verificação em duas etapas desativada.</div>{% endif %}
+{% if saved == 'codigos' %}<div class="alert success-box">Novos códigos de recuperação gerados. Os anteriores deixaram de valer.</div>{% endif %}
+
+{% if codigos %}
+<section class="panel">
+  <div class="panel-head"><h2>Códigos de recuperação</h2></div>
+  <div class="alert warning-box">
+    <strong>Guarde estes códigos agora.</strong> Eles aparecem uma única vez.
+    O banco de dados armazena apenas o hash — nem o administrador da plataforma consegue exibi-los de novo.
+    Cada código serve para um único acesso, caso o celular seja perdido.
+  </div>
+  <div class="check-grid">
+    {% for c in codigos %}<div class="stat"><strong>{{ c }}</strong></div>{% endfor %}
+  </div>
+  <div class="safe-note">Sugestão: imprima e guarde junto dos documentos de constituição do escritório, ou grave no cofre de senhas.</div>
+</section>
+{% endif %}
+
+{% if not ativo %}
+<section class="panel">
+  <div class="panel-head"><h2>Ativar</h2></div>
+  <div class="grid2">
+    <div>
+      <p><strong>1.</strong> Abra o aplicativo autenticador e escolha adicionar uma conta.</p>
+      <p><strong>2.</strong> Aponte a câmera para o código abaixo{% if not qr_svg %} ou cadastre manualmente{% endif %}.</p>
+      <p><strong>3.</strong> Digite o código de seis dígitos que o aplicativo exibir.</p>
+      {% if qr_svg %}<div class="upload-panel">{{ qr_svg|safe }}</div>{% endif %}
+    </div>
+    <div>
+      <span class="eyebrow">Cadastro manual</span>
+      <p class="muted">Se preferir não usar a câmera, informe estes dados no aplicativo:</p>
+      <div class="list-row"><span>Conta</span><strong>{{ user['email'] }}</strong></div>
+      <div class="list-row"><span>Chave</span><strong>{{ segredo }}</strong></div>
+      <div class="list-row"><span>Tipo</span><strong>Baseado em tempo (TOTP)</strong></div>
+      <div class="list-row"><span>Dígitos</span><strong>6</strong></div>
+      <div class="list-row"><span>Intervalo</span><strong>30 segundos</strong></div>
+      <div class="safe-note">Esta chave é uma credencial: não a envie por WhatsApp, e-mail ou qualquer serviço externo. O QR Code acima é gerado dentro do próprio servidor, sem sair da máquina.</div>
+      <form method="post" action="/settings/2fa/ativar" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+        <label>Código do aplicativo<input type="text" name="codigo" required inputmode="numeric" placeholder="000000" autocomplete="one-time-code"></label>
+        <button>Confirmar e ativar</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% else %}
+<section class="panel">
+  <div class="panel-head"><h2>Situação</h2></div>
+  <div class="list-row"><span>Verificação em duas etapas</span><strong>Ativa</strong></div>
+  <div class="list-row"><span>Códigos de recuperação não usados</span><strong>{{ codigos_restantes }}</strong></div>
+  {% if codigos_restantes <= 2 %}
+  <div class="alert warning-box">Restam poucos códigos de recuperação. Gere novos antes que acabem.</div>
+  {% endif %}
+  {% if exigido %}<div class="safe-note">Este escritório exige verificação em duas etapas, portanto ela não pode ser desativada.</div>{% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Gerar novos códigos de recuperação</h2></div>
+  <p class="muted">Os códigos anteriores deixam de valer imediatamente.</p>
+  <form method="post" action="/settings/2fa/codigos" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+    <label>Senha atual<input type="password" name="password" required autocomplete="current-password"></label>
+    <button class="ghost">Gerar novos códigos</button>
+  </form>
+</section>
+
+{% if not exigido %}
+<section class="panel">
+  <div class="panel-head"><h2>Desativar</h2></div>
+  <div class="alert warning-box">Sem o segundo fator, uma senha vazada basta para abrir os autos de todos os clientes deste workspace.</div>
+  <form method="post" action="/settings/2fa/desativar" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+    <label>Senha atual<input type="password" name="password" required autocomplete="current-password"></label>
+    <label>Código do aplicativo<input type="text" name="codigo" required inputmode="numeric" placeholder="000000"></label>
+    <button class="danger-button">Desativar verificação em duas etapas</button>
+  </form>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

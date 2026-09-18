@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}Verificação em duas etapas · JARBAS Jurídico{% endblock %}
+{% block public_content %}
+<div class="auth-grid">
+  <section class="auth-hero">
+    <div class="brand-large">JARBAS <span>JURÍDICO</span></div>
+    <h1>Segunda etapa de verificação.</h1>
+    <p>Senha correta não abre sozinha um sistema que guarda autos sob sigilo profissional. Informe o código de seis dígitos do seu aplicativo autenticador.</p>
+    <div class="trust-row"><span>TOTP RFC 6238</span><span>Código de uso único</span><span>LGPD</span></div>
+  </section>
+  <section class="auth-card">
+    <div class="product-lockup"><div class="jarbas-mark">J</div><div><strong>JARBAS Jurídico</strong><small>Verificação em duas etapas</small></div></div>
+    <span class="eyebrow">Acesso seguro</span>
+    <h2>Informe o código</h2>
+    <p class="muted">Conta: {{ email }}</p>
+    {% if error %}<div class="alert danger">{{ error }}</div>{% endif %}
+    <form method="post" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+      <label>Código de verificação
+        <input type="text" name="codigo" required autocomplete="one-time-code" inputmode="numeric"
+               placeholder="000000" autofocus>
+      </label>
+      <button>Confirmar e entrar</button>
+    </form>
+    <div class="safe-note">Perdeu o celular? Informe no mesmo campo um dos <strong>códigos de recuperação</strong> guardados na ativação. Cada um vale uma única vez.</div>
+    <a class="text-link product-link" href="/logout">← Cancelar e voltar ao login</a>
+  </section>
+</div>
+{% endblock %}

@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
 
-from .database import db
+from .database import DATA_DIR, db
 from .smart_intake import detect_case_metadata
 from .copilot import index_pdf, safe_filename, store_uploaded_pdf, search_case, recent_context, resolve_uploaded_pdf_path
 from .document_generator import create_power_of_attorney, create_ajg_declaration
@@ -25,9 +25,9 @@ from .ai_gateway import (
 
 router = APIRouter()
 BASE_DIR = Path(__file__).resolve().parent.parent
-IMPORT_ROOT = BASE_DIR / "data" / "imports"
-GENERATED_ROOT = BASE_DIR / "data" / "generated"
-UPLOAD_ROOT = BASE_DIR / "data" / "uploads"
+IMPORT_ROOT = DATA_DIR / "imports"
+GENERATED_ROOT = DATA_DIR / "generated"
+UPLOAD_ROOT = DATA_DIR / "uploads"
 for p in (IMPORT_ROOT, GENERATED_ROOT, UPLOAD_ROOT):
     p.mkdir(parents=True, exist_ok=True)
 

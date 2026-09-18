@@ -75,6 +75,31 @@ def verificar_codigo(segredo_b32: str, informado: str,
     return False
 
 
+def periodo_do_codigo(segredo_b32: str, informado: str,
+                      agora: float | None = None, janela: int = JANELA) -> int | None:
+    """Devolve o período (contador de 30s) que o código informado satisfaz.
+
+    `verificar_codigo` responde sim/não, e isso não basta para impedir reuso:
+    quem intercepta um código o reapresenta dentro da mesma janela e entra.
+    Para registrar o código como gasto é preciso saber QUAL período ele
+    satisfez — não necessariamente o atual, já que a janela tolera ±1.
+
+    Devolve None quando o código não confere. Comparação em tempo constante,
+    e sem sair do laço no primeiro acerto, para não vazar por tempo qual
+    período casou.
+    """
+    informado = (informado or "").strip().replace(" ", "").replace("-", "")
+    if not informado.isdigit() or len(informado) != DIGITOS:
+        return None
+    agora = time.time() if agora is None else agora
+    base = int(agora) // PERIODO
+    encontrado = None
+    for desvio in range(-janela, janela + 1):
+        if hmac.compare_digest(_codigo(segredo_b32, base + desvio), informado):
+            encontrado = base + desvio
+    return encontrado
+
+
 def uri_otpauth(segredo_b32: str, email: str, emissor: str = "JARBAS Jurídico") -> str:
     """URI para o QR Code do aplicativo autenticador."""
     rotulo = urllib.parse.quote(f"{emissor}:{email}")

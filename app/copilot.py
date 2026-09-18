@@ -13,6 +13,7 @@ from typing import Iterable, Optional
 
 from .petition_generator import identity_prompt, complete_local_draft
 from .pdf_pipeline import extract_pdf as robust_extract_pdf
+from .database import DATA_DIR
 
 from .ai_gateway import (
     configured as gateway_configured,
@@ -88,7 +89,7 @@ def resolve_uploaded_pdf_path(path_value: str, *, org_id: int | None = None, cas
     Prioriza a raiz canônica data/uploads/<org>/<case>. Se o banco ainda apontar
     para uma instalação antiga, tenta o stored_name/basename na raiz canônica.
     """
-    upload_root = (Path(__file__).resolve().parent.parent / "data" / "uploads").resolve(strict=False)
+    upload_root = (DATA_DIR / "uploads").resolve(strict=False)
     expected_dir = upload_root
     if org_id is not None:
         expected_dir = expected_dir / str(org_id)
@@ -704,7 +705,7 @@ def remove_document_files(path: Optional[str]) -> None:
         return
     try:
         p = Path(path).resolve(strict=False)
-        upload_root = (BASE_DIR / "data" / "uploads").resolve(strict=False)
+        upload_root = (DATA_DIR / "uploads").resolve(strict=False)
         p.relative_to(upload_root)
         if p.is_file():
             p.unlink(missing_ok=True)

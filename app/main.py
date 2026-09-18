@@ -24,10 +24,12 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
-from .database import db, ensure_column, initialize_schema
+from .database import DATA_DIR, db, ensure_column, initialize_schema
 from . import plan_limits
 from . import nome_documento
 from . import movimentacoes
+from . import auth_2fa
+from . import two_factor
 from .smart_intake import detect_case_metadata
 from .document_generator import create_power_of_attorney, create_ajg_declaration
 from .petition_generator import build_identity_context, create_draft_pdf, complete_local_draft
@@ -47,11 +49,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env.local", override=False)
 WORKSPACE_ASSET_DIR = BASE_DIR / "app" / "static" / "workspaces"
 WORKSPACE_ASSET_DIR.mkdir(parents=True, exist_ok=True)
-UPLOAD_ROOT = BASE_DIR / "data" / "uploads"
+UPLOAD_ROOT = DATA_DIR / "uploads"
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
-IMPORT_ROOT = BASE_DIR / "data" / "imports"
+IMPORT_ROOT = DATA_DIR / "imports"
 IMPORT_ROOT.mkdir(parents=True, exist_ok=True)
-GENERATED_ROOT = BASE_DIR / "data" / "generated"
+GENERATED_ROOT = DATA_DIR / "generated"
 GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
 
 APP_ENV = os.getenv("JARBAS_ENV", "development").strip().lower()
@@ -121,12 +123,41 @@ def csrf_error():
 
 
 templates.env.globals["csrf_token"] = csrf_token
+# A versão exibida no rodapé, na barra lateral e em outras quatro telas
+# estava escrita à mão nos templates, e ficou parada numa release antiga
+# enquanto o sistema avançava. Quem abria o sistema — ou mandava um print
+# ao suporte — lia a versão errada. Agora sai da mesma fonte que /health:
+# o VERSION.txt.
+templates.env.globals["app_version"] = APP_VERSION
 
 # Proteção simples de força bruta no MVP. Em escala, substituir por Redis/WAF.
 LOGIN_FAILURES: dict[str, list[float]] = {}
 
+# Quantos proxies reversos existem na frente do JARBAS. 0 = nenhum.
+#
+# Atrás de nginx/Caddy/Traefik, request.client.host é o IP do PROXY, igual
+# para todo mundo. Com isso o bloqueio de força bruta vira global: oito
+# senhas erradas de um estranho na internet trancam o escritório inteiro
+# para fora, e a auditoria registra o IP do proxy em vez do IP de quem agiu.
+#
+# X-Forwarded-For só pode ser lido quando SABEMOS que um proxy o reescreve,
+# porque o cliente pode forjar o cabeçalho e escapar do bloqueio escolhendo
+# um IP novo a cada tentativa. Por isso a leitura é opt-in e conta saltos a
+# partir da DIREITA, que é a parte que o nosso proxy acrescentou.
+TRUSTED_PROXY_HOPS = max(0, int(os.getenv("JARBAS_TRUSTED_PROXY_HOPS", "0") or 0))
+
+
 def login_client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+    direto = request.client.host if request.client else "unknown"
+    if not TRUSTED_PROXY_HOPS:
+        return direto
+    encaminhados = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if not encaminhados:
+        return direto
+    # O salto mais à direita é o proxy imediato; recuamos o número de saltos
+    # confiáveis para chegar ao primeiro endereço que o cliente não controla.
+    indice = len(encaminhados) - TRUSTED_PROXY_HOPS
+    return encaminhados[max(0, min(indice, len(encaminhados) - 1))]
 
 def login_is_blocked(request: Request) -> bool:
     import time
@@ -817,6 +848,15 @@ def require_workspace(request: Request):
     allowed, state = subscription_access_state(org["id"])
     if not allowed and not exempt and not user["is_superadmin"]:
         return user, RedirectResponse(f"/billing?subscription={state}", status_code=303)
+
+    # Exigência de segundo fator. Quem ainda não configurou fica preso na
+    # própria tela de configuração — sem isso a exigência seria apenas um
+    # aviso, e um aviso não protege auto de cliente nenhum. A tela de
+    # configuração, a troca de senha e a saída ficam de fora, senão o
+    # usuário fica trancado sem ter como cumprir a exigência.
+    if auth_2fa.exige_2fa(user, org) and not two_factor.ativo(user["id"]):
+        if not path.startswith(("/settings/2fa", "/logout", "/health", "/static", "/account/password")):
+            return user, RedirectResponse("/settings/2fa?obrigatorio=1", status_code=303)
     return user, org
 
 
@@ -1012,12 +1052,87 @@ def login(request: Request, email: str = Form(...), password: str = Form(...), c
     login_success(request)
     # Evita fixação de sessão: descarta qualquer estado anônimo e cria contexto autenticado novo.
     request.session.clear()
+    request.session["_csrf"] = secrets.token_urlsafe(32)
+
+    # Senha conferida não é sessão autenticada quando há segundo fator. A
+    # sessão fica em estado intermediário, sem a chave "user", que é a única
+    # coisa que current_user() aceita — nenhuma rota do sistema abre daqui.
+    if two_factor.ativo(user["id"]):
+        request.session["_2fa_user_id"] = user["id"]
+        request.session["_2fa_email"] = user["email"]
+        request.session["_2fa_expira"] = (
+            datetime.now() + timedelta(minutes=two_factor.PRAZO_SEGUNDA_ETAPA_MIN)
+        ).isoformat(timespec="seconds")
+        return RedirectResponse("/login/2fa", status_code=303)
+
+    abrir_sessao(request, user)
+    return RedirectResponse("/", status_code=303)
+
+
+def abrir_sessao(request: Request, user) -> None:
+    """Promove a sessão a autenticada. Ponto único de entrada no sistema."""
+    request.session.pop("_2fa_user_id", None)
+    request.session.pop("_2fa_email", None)
+    request.session.pop("_2fa_expira", None)
     request.session["user"] = user["email"]
     request.session["_csrf"] = secrets.token_urlsafe(32)
     workspaces = available_workspaces(user["id"])
     if workspaces:
         request.session["org_id"] = workspaces[0]["id"]
     log_action(request, "Login efetuado", request.session.get("org_id"))
+
+
+def usuario_em_segunda_etapa(request: Request):
+    """Usuário que já provou a senha e ainda deve o código. None se expirou."""
+    user_id = request.session.get("_2fa_user_id")
+    if not user_id:
+        return None
+    expira = request.session.get("_2fa_expira", "")
+    try:
+        if datetime.now() > datetime.fromisoformat(expira):
+            request.session.clear()
+            return None
+    except (TypeError, ValueError):
+        request.session.clear()
+        return None
+    with db() as conn:
+        return conn.execute(
+            "SELECT id,name,email,role,is_superadmin,password_hash FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+
+
+@app.get("/login/2fa", response_class=HTMLResponse)
+def login_2fa_page(request: Request, error: str = ""):
+    if current_user(request):
+        return RedirectResponse("/", status_code=303)
+    user = usuario_em_segunda_etapa(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return safe_template_response(
+        "login_2fa.html",
+        {"request": request, "email": user["email"], "error": error or None},
+    )
+
+
+@app.post("/login/2fa", response_class=HTMLResponse)
+def login_2fa(request: Request, codigo: str = Form(""), csrf: str = Form("", alias="_csrf")):
+    if not valid_csrf(request, csrf):
+        return csrf_error()
+    if login_is_blocked(request):
+        return HTMLResponse("Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente.", status_code=429)
+    user = usuario_em_segunda_etapa(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if not two_factor.verificar(user["id"], codigo):
+        login_failure(request)
+        return safe_template_response(
+            "login_2fa.html",
+            {"request": request, "email": user["email"],
+             "error": "Código inválido, expirado ou já utilizado."},
+            status_code=401,
+        )
+    login_success(request)
+    abrir_sessao(request, user)
     return RedirectResponse("/", status_code=303)
 
 
@@ -2550,6 +2665,124 @@ async def update_workspace_settings(
         )
     log_action(request, "Identidade e configurações do workspace atualizadas")
     return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+def _qr_svg(uri: str) -> str:
+    """QR Code gerado LOCALMENTE, em SVG embutido na página.
+
+    O segredo TOTP não pode sair da máquina: mandá-lo a um serviço externo de
+    geração de QR entregaria a terceiro a credencial que protege os autos.
+    Se o segno não estiver instalado, devolvemos vazio e a tela cai na
+    digitação manual do segredo — que funciona em qualquer aplicativo.
+    """
+    try:
+        import io
+        import segno
+    except Exception:
+        return ""
+    try:
+        # O segno escreve BYTES, mesmo em SVG. Passar um StringIO levanta
+        # TypeError, que o except engoliria: a tela cairia no cadastro manual
+        # sem QR e sem ninguém entender por quê.
+        buffer = io.BytesIO()
+        segno.make(uri, error="m").save(
+            buffer, kind="svg", scale=5, border=2,
+            dark="#2b0d16", light="#ffffff", xmldecl=False, svgns=True,
+        )
+        return buffer.getvalue().decode("utf-8")
+    except Exception:
+        return ""
+
+
+@app.get("/settings/2fa", response_class=HTMLResponse)
+def two_factor_page(request: Request, obrigatorio: str = "", error: str = "", saved: str = ""):
+    user = require_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    ativo = two_factor.ativo(user["id"])
+    org = current_workspace(request, user)
+    exigido = auth_2fa.exige_2fa(user, org)
+    codigos = request.session.pop("_2fa_codigos", None)
+
+    segredo = uri = qr = ""
+    if not ativo:
+        try:
+            segredo, uri = two_factor.iniciar_inscricao(user["id"], user["email"])
+        except ValueError:
+            ativo = True
+        else:
+            qr = _qr_svg(uri)
+    return safe_template_response(
+        "settings_2fa.html",
+        {
+            "request": request, "user": user, "organization": org,
+            "workspaces": available_workspaces(user["id"]),
+            "ativo": ativo, "exigido": exigido,
+            "obrigatorio": obrigatorio == "1",
+            "segredo": segredo, "otpauth_uri": uri, "qr_svg": qr,
+            "codigos": codigos,
+            "codigos_restantes": two_factor.codigos_restantes(user["id"]) if ativo else 0,
+            "error": error or None, "saved": saved or None,
+        },
+    )
+
+
+@app.post("/settings/2fa/ativar")
+def two_factor_ativar(request: Request, codigo: str = Form(""), csrf: str = Form("", alias="_csrf")):
+    if not valid_csrf(request, csrf):
+        return csrf_error()
+    user = require_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    codigos = two_factor.confirmar_inscricao(user["id"], codigo)
+    if codigos is None:
+        return RedirectResponse("/settings/2fa?error=codigo", status_code=303)
+    # Os códigos em claro existem só nesta passagem: o banco guarda hash.
+    request.session["_2fa_codigos"] = codigos
+    log_action(request, "Segundo fator ativado")
+    return RedirectResponse("/settings/2fa?saved=ativado", status_code=303)
+
+
+@app.post("/settings/2fa/desativar")
+def two_factor_desativar(request: Request, password: str = Form(""), codigo: str = Form(""), csrf: str = Form("", alias="_csrf")):
+    if not valid_csrf(request, csrf):
+        return csrf_error()
+    user = require_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    org = current_workspace(request, user)
+    if auth_2fa.exige_2fa(user, org):
+        return RedirectResponse("/settings/2fa?error=obrigatorio", status_code=303)
+    # Desligar proteção exige provar as DUAS credenciais: só a sessão aberta
+    # não basta, senão um computador desbloqueado derruba o segundo fator.
+    with db() as conn:
+        atual = conn.execute("SELECT password_hash FROM users WHERE id=?", (user["id"],)).fetchone()
+    if not atual or not verify_password(password, atual["password_hash"]):
+        return RedirectResponse("/settings/2fa?error=senha", status_code=303)
+    if not two_factor.verificar(user["id"], codigo):
+        return RedirectResponse("/settings/2fa?error=codigo", status_code=303)
+    two_factor.desativar(user["id"])
+    log_action(request, "Segundo fator desativado")
+    return RedirectResponse("/settings/2fa?saved=desativado", status_code=303)
+
+
+@app.post("/settings/2fa/codigos")
+def two_factor_regerar_codigos(request: Request, password: str = Form(""), csrf: str = Form("", alias="_csrf")):
+    if not valid_csrf(request, csrf):
+        return csrf_error()
+    user = require_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    with db() as conn:
+        atual = conn.execute("SELECT password_hash FROM users WHERE id=?", (user["id"],)).fetchone()
+    if not atual or not verify_password(password, atual["password_hash"]):
+        return RedirectResponse("/settings/2fa?error=senha", status_code=303)
+    codigos = two_factor.regerar_codigos_recuperacao(user["id"])
+    if codigos is None:
+        return RedirectResponse("/settings/2fa?error=inativo", status_code=303)
+    request.session["_2fa_codigos"] = codigos
+    log_action(request, "Códigos de recuperação regerados")
+    return RedirectResponse("/settings/2fa?saved=codigos", status_code=303)
 
 
 @app.post("/account/password")

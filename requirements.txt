@@ -15,5 +15,10 @@ python-multipart==0.0.29
 starlette==0.50.0
 uvicorn==0.48.0
 reportlab==4.4.9
+# QR Code do segundo fator, gerado LOCALMENTE. Python puro, sem dependência
+# transitiva. Mandar o segredo TOTP a um gerador de QR externo entregaria a
+# terceiro a credencial que protege os autos; por isso não é opcional trocar
+# por um serviço web. O app tolera a ausência: cai no cadastro manual.
+segno>=1.6,<2
 pymupdf>=1.26,<2
 pdfplumber>=0.11,<1

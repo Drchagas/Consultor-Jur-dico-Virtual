@@ -7,8 +7,22 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "data" / "jarbas.db"
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+# Onde vivem banco, uploads, PDFs importados e documentos gerados.
+#
+# O padrão continua sendo `data/` dentro da instalação — é o que o instalador
+# do Windows espera, faz backup e migra entre versões, e nada disso muda se a
+# variável não for definida.
+#
+# A variável existe porque em servidor os dados NÃO podem morar na árvore de
+# código: em container, `data/` dentro da imagem é apagado a cada atualização,
+# e o volume persistente precisa ser montado em outro lugar. Também separa o
+# que é sigiloso (autos de clientes) do que é apenas código, o que simplifica
+# backup, permissão de arquivo e resposta a incidente.
+DATA_DIR = Path(os.getenv("JARBAS_DATA_DIR", "").strip() or (BASE_DIR / "data")).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DB_PATH = DATA_DIR / "jarbas.db"
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 IS_POSTGRES = DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")

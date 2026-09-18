@@ -29,7 +29,7 @@
 <div class="action-row"><a class="button" href="/ai/quick?case_id={{ case['id'] }}">✦ JARBAS IA — analisar processo + autos + financeiro</a></div></section>
 
 <section class="copilot-launch panel">
-  <div class="copilot-launch-copy"><span class="eyebrow">JARBAS 8.3.1 · autos & estratégia</span><h2>Copiloto Jurídico</h2><p>Pergunte diretamente aos documentos, localize prova, identifique riscos, execute Hard Truth e gere minutas rastreáveis.</p></div>
+  <div class="copilot-launch-copy"><span class="eyebrow">JARBAS {{ app_version }} · autos & estratégia</span><h2>Copiloto Jurídico</h2><p>Pergunte diretamente aos documentos, localize prova, identifique riscos, execute Hard Truth e gere minutas rastreáveis.</p></div>
   <div class="copilot-kpis"><div><span>Documentos</span><b>{{ document_stats.documents }}</b></div><div><span>Páginas</span><b>{{ document_stats.pages }}</b></div><div><span>Texto indexado</span><b>{{ "%.1f"|format(document_stats.chars/1000) }}k</b></div><div><span>IA</span><b>{{ 'Conectada' if ai_connected else 'Modo local' }}</b></div></div>
   <a class="button" href="/cases/{{ case['id'] }}/copilot">Analisar autos →</a>
 </section>
