@@ -3,8 +3,14 @@
 Existe só para permitir rodar os testes em ambiente sem rede/sem pytest
 instalado. Em máquina normal use `pytest -q`, que é o alvo real.
 
-Suporta: coleta de test_*, fixtures autouse com yield, monkeypatch
-(setenv/delenv/setattr), pytest.raises(match=...) e pytest.approx.
+Suporta: coleta de test_*, fixtures autouse e NOMEADAS (inclusive com yield
+e encadeadas), tmp_path, monkeypatch (setenv/delenv/setattr),
+pytest.skip(allow_module_level=...), pytest.raises(match=...) e pytest.approx.
+
+Fixture nomeada foi acrescentada porque a suíte passou a ter testes que sobem
+a aplicação inteira contra um banco descartável. Sem isso este executor
+reprovava 30 testes que o pytest aprova — e um executor que acusa falha onde
+não há é pior do que executor nenhum: ensina a ignorar o resultado.
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ import inspect
 import os
 import re
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 
@@ -101,7 +108,11 @@ class _Pulado(Exception):
 
 class _PytestShim:
     @staticmethod
-    def skip(motivo=""):
+    def skip(motivo="", allow_module_level=False):
+        # allow_module_level existe no pytest de verdade e é a única forma
+        # correta de pular um arquivo inteiro durante a coleta. O shim aceita
+        # o argumento para que o mesmo arquivo de teste sirva aos dois
+        # executores — o pytest e este, usado quando não há pytest instalado.
         raise _Pulado(motivo)
 
     @staticmethod
@@ -130,6 +141,53 @@ class _PytestShim:
         return _PytestShim._Fixture(autouse=autouse)
 
 
+def _pedidos(fn):
+    """Parâmetros que são pedido de fixture.
+
+    O pytest ignora parâmetro que tem valor padrão — ele não é pedido de
+    fixture, é argumento opcional. `def test_x(tmp=None)` existe na suíte e
+    quebraria se tratássemos 'tmp' como fixture inexistente.
+    """
+    return [nome for nome, parametro in inspect.signature(fn).parameters.items()
+            if parametro.default is inspect.Parameter.empty
+            and parametro.kind not in (inspect.Parameter.VAR_POSITIONAL,
+                                       inspect.Parameter.VAR_KEYWORD)]
+
+
+def _resolver(nome, registro, cache, mp, tmp, pilha, geradores):
+    """Entrega o valor de uma fixture, montando as de que ela depende.
+
+    `pilha` guarda a cadeia em resolução para acusar dependência circular em
+    vez de estourar a recursão com uma mensagem incompreensível.
+    """
+    if nome in cache:
+        return cache[nome]
+    if nome == "monkeypatch":
+        return mp
+    if nome == "tmp_path":
+        return tmp
+    if nome not in registro:
+        raise LookupError(
+            f"fixture '{nome}' não encontrada. Este executor resolve fixtures "
+            f"definidas no próprio arquivo, além de monkeypatch e tmp_path.")
+    if nome in pilha:
+        raise LookupError(f"dependência circular entre fixtures: {' -> '.join(pilha)} -> {nome}")
+
+    fixture = registro[nome]
+    kw = {}
+    for parametro in _pedidos(fixture):
+        kw[parametro] = _resolver(parametro, registro, cache, mp, tmp,
+                                  pilha + [nome], geradores)
+    valor = fixture(**kw)
+    if inspect.isgenerator(valor):
+        gerador = valor
+        valor = next(gerador)
+        # Teardown na ordem inversa da construção, como o pytest faz.
+        geradores.insert(0, gerador)
+    cache[nome] = valor
+    return valor
+
+
 def _carregar(caminho: Path):
     sys.modules["pytest"] = _PytestShim
     spec = importlib.util.spec_from_file_location(caminho.stem, caminho)
@@ -144,8 +202,9 @@ def rodar(arquivos: list[Path]) -> int:
     for arq in arquivos:
         try:
             mod = _carregar(arq)
-        except SystemExit:
-            print(f"\n── {arq.name}: ignorado neste layout")
+        except (SystemExit, _Pulado) as motivo:
+            detalhe = f": {motivo}" if str(motivo) else ""
+            print(f"\n── {arq.name}: ignorado neste layout{detalhe}")
             continue
         autouse = [f for _, f in inspect.getmembers(mod, inspect.isfunction)
                    if getattr(f, "_autouse", False)]
@@ -153,20 +212,24 @@ def rodar(arquivos: list[Path]) -> int:
                   if n.startswith("test_")]
         testes.sort(key=lambda t: inspect.getsourcelines(t[1])[1])
         print(f"\n── {arq.name} ({len(testes)} testes)")
+        registro = {n: f for n, f in inspect.getmembers(mod, inspect.isfunction)
+                    if getattr(f, "_e_fixture", False)}
         for nome, fn in testes:
             mp = _MonkeyPatch()
             geradores = []
+            cache = {}
+            tmpdir = tempfile.TemporaryDirectory(prefix="minipytest-")
+            tmp = Path(tmpdir.name)
             try:
                 for fx in autouse:
-                    parametros = inspect.signature(fx).parameters
-                    kw = {"monkeypatch": mp} if "monkeypatch" in parametros else {}
+                    kw = {p: _resolver(p, registro, cache, mp, tmp, [], geradores)
+                          for p in _pedidos(fx)}
                     r = fx(**kw)
                     if inspect.isgenerator(r):
                         next(r)
-                        geradores.append(r)
-                kw = {}
-                if "monkeypatch" in inspect.signature(fn).parameters:
-                    kw["monkeypatch"] = mp
+                        geradores.insert(0, r)
+                kw = {p: _resolver(p, registro, cache, mp, tmp, [], geradores)
+                      for p in _pedidos(fn)}
                 fn(**kw)
                 print(f"   PASS  {nome}")
                 passou += 1
@@ -185,6 +248,7 @@ def rodar(arquivos: list[Path]) -> int:
                     except Exception:
                         pass
                 mp.desfazer()
+                tmpdir.cleanup()
 
     print(f"\n{'='*62}\nRESULTADO: {passou} passaram, {falhou} falharam")
     for arquivo, nome, tb in falhas:

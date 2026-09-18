@@ -1,9 +1,88 @@
-JARBAS JURÍDICO ENTERPRISE 8.3.1 — PDF ENGINE
+JARBAS JURIDICO ENTERPRISE 9.0.2
+CHAGAS - ADVOGADOS
 
-1. EXTRAIA TODO O ZIP.
+========================================================================
+ COMO INSTALAR
+========================================================================
+
+1. EXTRAIA TODO O ZIP para uma pasta (por exemplo, a Area de Trabalho).
+   NAO execute nada de dentro do ZIP: o instalador precisa dos arquivos
+   ao lado dele, e o Windows nao os entrega enquanto estiverem compactados.
+
 2. Execute VERIFICAR_PACOTE.cmd.
+   Confere, arquivo por arquivo, se o download veio integro. Se acusar
+   arquivo corrompido, baixe o ZIP de novo: instalar com arquivo truncado
+   deixa o sistema quebrado de um jeito dificil de diagnosticar.
+
 3. Execute INSTALAR_AGORA.cmd.
-4. NÃO apague manualmente bancos ou pastas de versões anteriores: o instalador faz backup e migração.
-5. Para PDFs escaneados, configure a OpenAI. Se Tesseract já estiver instalado, o JARBAS também tentará OCR local automaticamente.
-6. Após instalar, em um processo use Copiloto > Reprocessar todos os PDFs para forçar nova leitura.
-7. Se algum PDF não for lido, execute DIAGNOSTICO_JARBAS.cmd e verifique a seção PDF ENGINE.
+   Defina a senha do administrador quando for pedida. A instalacao leva
+   alguns minutos: ela baixa o Python, instala as dependencias, migra o
+   banco, roda um self-test e so entao se considera concluida.
+
+4. Ao final, o instalador abre CREDENCIAIS_INICIAIS.txt.
+   Guarde esse arquivo em local seguro e apague a copia da Area de Trabalho.
+
+O instalador cria um atalho "JARBAS Juridico" na Area de Trabalho.
+
+========================================================================
+ EXIGE INTERNET DURANTE A INSTALACAO
+========================================================================
+
+O instalador baixa o Python portatil e as bibliotecas. Se o antivirus ou
+o proxy do escritorio bloquearem, a instalacao para com mensagem clara.
+Depois de instalado, o JARBAS funciona sem internet — exceto as funcoes
+de IA, que dependem da API do Claude.
+
+========================================================================
+ NAO FACA ISTO
+========================================================================
+
+NAO apague manualmente bancos, pastas ou versoes anteriores do JARBAS.
+O instalador localiza o banco com os dados reais, pontua os candidatos,
+faz backup e migra o escolhido. Apagar antes e a forma mais rapida de
+perder processos.
+
+========================================================================
+ DEPOIS DE INSTALAR - OPERACAO COM AUTOS REAIS
+========================================================================
+
+1. ATIVE A VERIFICACAO EM DUAS ETAPAS.
+   No sistema: Configuracoes > Verificacao em duas etapas.
+   Guarde os codigos de recuperacao que aparecem: eles sao exibidos UMA
+   unica vez e sao o que salva a conta se o celular se perder.
+
+2. CONFIRA O BACKUP.
+   A instalacao agenda uma copia diaria em Documentos\JARBAS_Backups.
+   Olhe la daqui a alguns dias e confirme que os arquivos estao saindo.
+   Uma vez por semestre, teste restaurar uma copia: backup que nunca foi
+   restaurado nao e backup.
+
+3. CONFIGURE A IA (OPCIONAL).
+   Execute CONFIGURAR_IA.cmd e cole a chave gerada em console.anthropic.com
+   (comeca com sk-ant-). O provedor e a Anthropic; chave da OpenAI NAO
+   funciona. Sem chave, o JARBAS opera normalmente como gestao de processos,
+   clientes, prazos, documentos e financeiro.
+
+   Toda saida da IA e minuta tecnica auxiliar. Confira cada fato, cada data,
+   cada numero de processo e cada jurisprudencia na fonte oficial antes de
+   protocolar.
+
+========================================================================
+ QUANDO ALGO DER ERRADO
+========================================================================
+
+Nao abre ................. DIAGNOSTICO_JARBAS.cmd
+PDF nao e lido ........... DIAGNOSTICAR_PDF.cmd
+IA nao responde .......... DIAGNOSTICAR_IA.cmd
+Arquivo alterado ......... VERIFICAR_INTEGRIDADE.cmd
+Esqueceu a senha ......... RESETAR_SENHA.cmd
+Backup agora ............. BACKUP_JARBAS.cmd
+
+Guarde o codigo do erro e o arquivo de diagnostico antes de tentar
+consertar por conta propria.
+
+========================================================================
+CHAGAS - ADVOGADOS
+Rua Jacob Adami, no 55, Bairro Suica, Canela/RS, CEP 95684-196
+Telefone/WhatsApp: (54) 99110-1959 - schagasadvocacia@gmail.com
+Dr. Sandro D. Chagas - OAB/RS 105.040

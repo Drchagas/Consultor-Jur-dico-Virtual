@@ -23,7 +23,12 @@ NOME_PS1 = f"INSTALAR_JARBAS_{VERSAO.replace('.', '_')}.ps1"
 _CANDIDATOS = [_RAIZ / "installer" / NOME_PS1, _RAIZ / NOME_PS1]
 PS1 = next((c for c in _CANDIDATOS if c.is_file()), None)
 
-pytestmark = pytest.mark.skipif(PS1 is None, reason="instalador não presente nesta árvore")
+# Pulo no nível do módulo, e não pytest.mark: tools/minipytest.py é o
+# executor usado quando não há pytest instalado — o caso da máquina do
+# escritório — e o shim dele não implementa marcadores. Um teste que só roda
+# num dos dois executores é um teste que não roda onde mais importa.
+if PS1 is None:
+    pytest.skip("instalador não presente nesta árvore", allow_module_level=True)
 
 FONTE = PS1.read_text(encoding="utf-8-sig") if PS1 else ""
 SCRIPTS = _RAIZ / "scripts"
@@ -126,4 +131,40 @@ def test_o_backup_do_windows_nao_copia_o_banco_com_o_servidor_de_pe():
     )
     assert not re.search(r"Copy-Item.*'data'", texto), (
         "voltou a copiar a pasta data/ diretamente"
+    )
+
+
+# ============================================ a suíte roda dentro do pacote
+
+def test_nenhum_teste_derruba_a_coleta_com_systemexit():
+    """SystemExit durante a coleta aborta o pytest INTEIRO.
+
+    Aconteceu duas vezes neste projeto, das duas com o mesmo efeito: o
+    comando roda, imprime "no tests ran" e devolve INTERNALERROR — e quem
+    olha de relance conclui que está tudo certo.
+
+    Primeiro com tools/test_claude.py, script operacional que o pytest
+    coletava pelo nome (resolvido por testpaths no pytest.ini). Depois com
+    tests/test_pacote_instalador.py, que usava `raise SystemExit(0)` para se
+    autopular dentro do pacote montado. Resultado: na máquina do escritório,
+    onde a suíte viaja junto justamente para revalidar a instalação, ela não
+    rodava nunca.
+
+    A forma correta de pular um arquivo inteiro é
+    `pytest.skip(..., allow_module_level=True)`.
+    """
+    import re as _re
+    pasta = Path(__file__).resolve().parent
+    problemas = []
+    for arq in sorted(pasta.glob("test_*.py")):
+        fonte = arq.read_text(encoding="utf-8")
+        sem_docstring = _re.sub(r'"""(?:.|\n)*?"""', "", fonte)
+        # Só interessa o nível do módulo: dentro de função, o pytest trata.
+        for linha in sem_docstring.splitlines():
+            if _re.match(r"^\s{0,4}(raise\s+SystemExit|sys\.exit)\b", linha):
+                problemas.append(f"{arq.name}: {linha.strip()}")
+    assert not problemas, (
+        "SystemExit no nível do módulo aborta a coleta inteira:\n"
+        + "\n".join(problemas)
+        + "\nUse pytest.skip(..., allow_module_level=True)."
     )

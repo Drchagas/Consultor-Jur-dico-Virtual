@@ -83,6 +83,14 @@ def montar(destino: Path) -> Path:
         if arq.is_file():
             shutil.copy2(arq, destino / arq.name)
 
+    # 6b. LEIA_PRIMEIRO na RAIZ do pacote, não só dentro de payload/.
+    #     Quem extrai o ZIP vê uma pasta com .cmd e uma pasta payload/; sem
+    #     um arquivo de orientação ao lado dos executáveis, a primeira ação
+    #     de quem instala é adivinhar qual .cmd clicar.
+    leia = RAIZ / "docs" / "LEIA_PRIMEIRO.txt"
+    if leia.is_file():
+        shutil.copy2(leia, destino / "LEIA_PRIMEIRO.txt")
+
     # 7. Manifesto — caminhos relativos com barra invertida (Join-Path do Windows)
     linhas = []
     for p in sorted(destino.rglob("*")):

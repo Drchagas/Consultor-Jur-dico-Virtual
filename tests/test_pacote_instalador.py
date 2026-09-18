@@ -26,8 +26,13 @@ import build_installer as B  # noqa: E402
 _PS1 = sorted((RAIZ / "installer").glob("INSTALAR_JARBAS_*.ps1")) \
     if (RAIZ / "installer").is_dir() else []
 if not _PS1:
-    print("   (pulado: sem installer/ — rode da árvore de fontes)")
-    raise SystemExit(0)
+    # NÃO troque por SystemExit. O pytest não trata SystemExit durante a
+    # coleta: ele aborta a execução INTEIRA com INTERNALERROR e nenhum outro
+    # arquivo de teste chega a rodar. Era exatamente o que acontecia dentro do
+    # pacote instalado — onde a suíte viaja junto justamente para revalidar a
+    # instalação na máquina do escritório, e não rodava nunca.
+    pytest.skip("sem installer/ — este arquivo só roda da árvore de fontes",
+                allow_module_level=True)
 PS1_FONTE = _PS1[0]
 PS1_TEXTO = PS1_FONTE.read_text(encoding="utf-8-sig")
 

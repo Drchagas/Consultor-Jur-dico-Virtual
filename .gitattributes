@@ -1,0 +1,28 @@
+# Quebra de linha dos scripts do Windows.
+#
+# Sem isto, o git normaliza .cmd e .ps1 para LF ao versionar, e o pacote de
+# instalação sai com quebra de linha Unix. Em arquivo .cmd isso é risco real:
+# um bloco `if (...) else (...)` precisa do CRLF para fechar, e um .cmd que
+# termina sem CRLF pode perder a última linha — que no INSTALAR_AGORA.cmd é
+# justamente o `exit /b %RC%` que devolve o código de erro da instalação.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Documentos lidos no Bloco de Notas do Windows.
+docs/*.txt text eol=crlf
+*.bat text eol=crlf
+
+# O restante segue LF: são lidos por Python, que não se importa.
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+
+# Binários: nunca converter.
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.pdf binary
+*.zip binary
