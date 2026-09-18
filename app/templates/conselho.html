@@ -48,7 +48,7 @@
   <h2>Consumo do mês</h2>
   <p>
     Gasto real medido por token: <strong>US$ {{ '%.4f'|format(gasto_usd) }}</strong>
-    {% if teto_usd %} de um teto de <strong>US$ {{ '%.2f'|format(teto_usd) }}</strong>
+    {% if teto_usd %} de um teto de <strong>US$ {{ teto_usd|moeda(simbolo=False) }}</strong>
     (restam US$ {{ '%.4f'|format(restante_usd) }}){% else %}
     — <strong>sem teto configurado</strong>{% endif %}.
   </p>
@@ -87,7 +87,7 @@
     <tr><th>Data</th><th>Caso</th><th>Papel</th><th>Provedor</th><th>Modelo</th><th>Tokens</th><th>US$</th><th>s</th></tr>
     {% for h in historico %}
     <tr>
-      <td>{{ h['created_at'] }}</td>
+      <td>{{ h['created_at']|datahora }}</td>
       <td>{{ h['case_id'] or '—' }}</td>
       <td>{{ h['role'] }}</td>
       <td>{{ h['provider'] }}{% if h['fallback_from'] %} <em>(fallback de {{ h['fallback_from'] }})</em>{% endif %}</td>

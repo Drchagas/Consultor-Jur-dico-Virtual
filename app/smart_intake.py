@@ -330,9 +330,9 @@ def _local_detect(path: Path) -> dict[str, Any]:
     quality = "alta" if number and len(parties) >= 2 else "media" if number or parties else "baixa"
     warnings: list[str] = []
     if preview.get("status") == "needs_ocr":
-        warnings.append("O PDF não possui camada textual utilizável na amostra. A análise deve usar OCR local ou leitura direta do PDF pela OpenAI.")
+        warnings.append("O PDF é digitalizado (imagem), sem texto para ler. Instale o Tesseract para OCR local ou configure a chave da Anthropic; sem um dos dois, preencha os campos à mão.")
     elif preview.get("status") == "partial_ocr":
-        warnings.append("A extração textual é parcial; o JARBAS deve complementar a leitura com o PDF original pela OpenAI.")
+        warnings.append("A leitura do texto saiu parcial. Confira os campos preenchidos: com a chave da Anthropic configurada, o JARBAS lê as páginas restantes direto do PDF.")
     if not parties:
         warnings.append("Partes não reconhecidas com segurança pela leitura textual local.")
     return {
@@ -446,7 +446,7 @@ def detect_case_metadata(path: Path, *, prefer_ai: bool = True) -> dict[str, Any
     local = _local_detect(Path(path))
     if not prefer_ai or not ai_configured():
         if prefer_ai and not ai_configured():
-            local["warnings"].append("OpenAI não configurada; intake executado apenas pela camada textual local.")
+            local["warnings"].append("IA não configurada: os campos abaixo vieram da leitura local do texto do PDF. Confira tudo antes de confirmar.")
         return local
     try:
         ai_data, result = extract_case_metadata_from_pdf(Path(path))

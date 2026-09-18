@@ -1,17 +1,46 @@
 {% extends "base.html" %}{% block content %}
-<div class="hero"><div><span class="eyebrow">Cockpit do escritório</span><h1>Bom trabalho, {{ user['name'] }}.</h1><p>{{ organization['name'] }} · operação jurídica, comercial e financeira em um único sistema.</p></div><div class="date">{{ today }}</div></div>
+<div class="hero"><div><span class="eyebrow">Cockpit do escritório</span><h1>Bom trabalho, {{ user['name'] }}.</h1><p>{{ organization['name'] }} · operação jurídica, comercial e financeira em um único sistema.</p></div><div class="date">{{ today|data }}</div></div>
+{% if stats.clients == 0 and stats.cases == 0 %}
+{# Primeiro acesso: oito zeros e seis "nenhum X cadastrado" não dizem por onde
+   começar. Este bloco some sozinho assim que existir o primeiro cliente ou
+   processo — não vira ruído permanente para quem já opera. #}
+<section class="panel success-box">
+  <div class="panel-head"><h2>Primeiros passos</h2><span class="badge">comece por aqui</span></div>
+  <p class="muted">O sistema está vazio. Qualquer um dos caminhos abaixo cria seu primeiro processo.</p>
+  <div class="check-grid">
+    <div class="stat">
+      <span>Caminho rápido</span>
+      <strong>Tem o PDF dos autos?</strong>
+      <small>O JARBAS lê o processo, identifica as partes e pergunta só quem é o seu cliente.</small>
+      <a class="button full" href="/intake">✦ Importar PDF do processo</a>
+    </div>
+    <div class="stat">
+      <span>Caminho manual</span>
+      <strong>Cadastrar do zero</strong>
+      <small>Cliente primeiro, depois o processo. Serve para consulta e caso ainda não distribuído.</small>
+      <a class="button ghost full" href="/clients">Cadastrar cliente</a>
+    </div>
+    <div class="stat">
+      <span>Antes de usar com autos reais</span>
+      <strong>Proteja o acesso</strong>
+      <small>Verificação em duas etapas: uma senha vazada não pode abrir os processos de todos os clientes.</small>
+      <a class="button ghost full" href="/settings/2fa">⛨ Ativar em 2 etapas</a>
+    </div>
+  </div>
+</section>
+{% endif %}
 <div class="stats dashboard-stats">
   <div class="stat"><span>Clientes</span><b>{{ stats.clients }}</b><small>ativos no workspace</small></div>
   <div class="stat"><span>Casos ativos</span><b>{{ stats.cases }}</b><small>de {{ subscription['case_limit'] }} permitidos</small></div>
   <div class="stat"><span>Prazos em 7 dias</span><b>{{ stats.deadlines }}</b><small>atenção operacional</small></div>
   <div class="stat"><span>Leads abertos</span><b>{{ stats.leads }}</b><small>oportunidades comerciais</small></div>
-  <div class="stat"><span>A receber</span><b>R$ {{ "%.2f"|format(stats.receivables) }}</b><small>carteira financeira</small></div>
-  <div class="stat"><span>A pagar</span><b>R$ {{ "%.2f"|format(stats.payables) }}</b><small>obrigações abertas</small></div>
-  <div class="stat"><span>Saldo</span><b>R$ {{ "%.2f"|format(stats.cash) }}</b><small>contas cadastradas</small></div>
+  <div class="stat"><span>A receber</span><b>{{ stats.receivables|moeda }}</b><small>carteira financeira</small></div>
+  <div class="stat"><span>A pagar</span><b>{{ stats.payables|moeda }}</b><small>obrigações abertas</small></div>
+  <div class="stat"><span>Saldo</span><b>{{ stats.cash|moeda }}</b><small>contas cadastradas</small></div>
   <div class="stat"><span>Tarefas</span><b>{{ stats.tasks }}</b><small>pendentes</small></div>
 </div>
 <div class="usage-banner"><div><span class="eyebrow">JARBAS IA</span><strong>{{ credits_left }} créditos disponíveis</strong><small>{{ usage }} utilizados de {{ subscription['monthly_credits'] }} neste mês.</small></div><div class="action-row"><a class="button secondary" href="/cases">Abrir processos</a><a class="button secondary" href="/billing">Plano e consumo</a></div></div>
-<div class="grid2"><section class="panel"><div class="panel-head"><h2>Prazos prioritários</h2><a href="/agenda">Agenda</a></div>{% if deadlines %}<div class="table-wrap"><table><tr><th>Data</th><th>Prazo</th><th>Caso</th></tr>{% for d in deadlines %}<tr><td>{{ d['due_date'] }}</td><td>{{ d['title'] }}</td><td>{{ d['case_number'] or d['case_title'] or '—' }}</td></tr>{% endfor %}</table></div>{% else %}<p class="empty">Nenhum prazo cadastrado.</p>{% endif %}</section><section class="panel"><div class="panel-head"><h2>Casos por risco</h2><a href="/cases">Ver todos</a></div>{% for c in critical %}<a class="case-row" href="/cases/{{ c['id'] }}"><span class="badge {{ c['risk']|lower|replace('í','i') }}">{{ c['risk'] }}</span><strong>{{ c['title'] }}</strong><small>{{ c['number'] or c['area'] }}</small></a>{% else %}<p class="empty">Nenhum caso cadastrado.</p>{% endfor %}</section></div>
-<div class="grid2"><section class="panel"><div class="panel-head"><h2>Próximas atividades</h2><a href="/agenda">Organizar</a></div>{% for a in activities %}<div class="list-row"><div><strong>{{ a['title'] }}</strong><small>{{ a['activity_type'] }} · {{ a['case_title'] or 'sem processo' }}</small></div><small>{{ a['due_at'] or a['start_at'] or 'sem data' }}</small></div>{% else %}<p class="empty">Sem atividades pendentes.</p>{% endfor %}</section><section class="panel"><div class="panel-head"><h2>Documentos recentes</h2><a href="/documents">GED</a></div>{% for d in recent_docs %}<a class="list-row link" href="/cases/{{ d['case_id'] }}/documents/{{ d['id'] }}"><div><strong>{{ d['original_name'] }}</strong><small>{{ d['case_title'] }}</small></div><span>{{ d['page_count'] }} pág.</span></a>{% else %}<p class="empty">Nenhum PDF indexado.</p>{% endfor %}</section></div>
-<div class="grid2"><section class="panel"><span class="eyebrow">Financeiro</span><h2>Saúde financeira</h2><div class="feature-list"><div><b>Recebido</b><span>R$ {{ "%.2f"|format(finance_snapshot.received_month) }} no mês</span></div><div><b>Pago</b><span>R$ {{ "%.2f"|format(finance_snapshot.paid_month) }} no mês</span></div><div><b>Inadimplência</b><span>R$ {{ "%.2f"|format(finance_snapshot.overdue_receivable) }} vencidos</span></div></div><a class="button" href="/finance">Abrir financeiro</a></section><section class="panel"><span class="eyebrow">Copiloto</span><h2>Fluxo jurídico recomendado</h2><div class="feature-list"><div><b>1</b><span>Cadastre o processo e envie os autos no mesmo formulário.</span></div><div><b>2</b><span>Use Pergunte aos Autos e Hard Truth para localizar fatos e vulnerabilidades.</span></div><div><b>3</b><span>Gere minuta rastreável e revise antes do protocolo.</span></div></div><a class="button" href="/cases">Novo processo</a></section></div>
+<div class="grid2"><section class="panel"><div class="panel-head"><h2>Prazos prioritários</h2><a href="/agenda">Agenda</a></div>{% if deadlines %}<div class="table-wrap"><table><tr><th>Data</th><th>Prazo</th><th>Caso</th></tr>{% for d in deadlines %}<tr><td>{{ d['due_date']|data }}</td><td>{{ d['title'] }}</td><td>{{ d['case_number'] or d['case_title'] or '—' }}</td></tr>{% endfor %}</table></div>{% else %}<p class="empty">Nenhum prazo cadastrado. <a href="/prazos">Cadastrar prazo</a> ou <a href="/prazos/simular">simular uma contagem</a>.</p>{% endif %}</section><section class="panel"><div class="panel-head"><h2>Casos por risco</h2><a href="/cases">Ver todos</a></div>{% for c in critical %}<a class="case-row" href="/cases/{{ c['id'] }}"><span class="badge {{ c['risk']|lower|replace('í','i') }}">{{ c['risk'] }}</span><strong>{{ c['title'] }}</strong><small>{{ c['number'] or c['area'] }}</small></a>{% else %}<p class="empty">Nenhum caso cadastrado. <a href="/intake">Importar o PDF dos autos</a> ou <a href="/cases">cadastrar manualmente</a>.</p>{% endfor %}</section></div>
+<div class="grid2"><section class="panel"><div class="panel-head"><h2>Próximas atividades</h2><a href="/agenda">Organizar</a></div>{% for a in activities %}<div class="list-row"><div><strong>{{ a['title'] }}</strong><small>{{ a['activity_type'] }} · {{ a['case_title'] or 'sem processo' }}</small></div><small>{{ a['due_at'] or a['start_at'] or 'sem data' }}</small></div>{% else %}<p class="empty">Sem atividades pendentes. <a href="/agenda">Agendar audiência, reunião ou tarefa</a>.</p>{% endfor %}</section><section class="panel"><div class="panel-head"><h2>Documentos recentes</h2><a href="/documents">GED</a></div>{% for d in recent_docs %}<a class="list-row link" href="/cases/{{ d['case_id'] }}/documents/{{ d['id'] }}"><div><strong>{{ d['original_name'] }}</strong><small>{{ d['case_title'] }}</small></div><span>{{ d['page_count'] }} pág.</span></a>{% else %}<p class="empty">Nenhum PDF indexado. <a href="/intake">Enviar os autos</a> para o Copiloto poder responder sobre eles.</p>{% endfor %}</section></div>
+<div class="grid2"><section class="panel"><span class="eyebrow">Financeiro</span><h2>Saúde financeira</h2><div class="feature-list"><div><b>Recebido</b><span>{{ finance_snapshot.received_month|moeda }} no mês</span></div><div><b>Pago</b><span>{{ finance_snapshot.paid_month|moeda }} no mês</span></div><div><b>Inadimplência</b><span>{{ finance_snapshot.overdue_receivable|moeda }} vencidos</span></div></div><a class="button" href="/finance">Abrir financeiro</a></section><section class="panel"><span class="eyebrow">Copiloto</span><h2>Fluxo jurídico recomendado</h2><div class="feature-list"><div><b>1</b><span>Cadastre o processo e envie os autos no mesmo formulário.</span></div><div><b>2</b><span>Use Pergunte aos Autos e Hard Truth para localizar fatos e vulnerabilidades.</span></div><div><b>3</b><span>Gere minuta rastreável e revise antes do protocolo.</span></div></div><a class="button" href="/cases">Novo processo</a></section></div>
 {% endblock %}

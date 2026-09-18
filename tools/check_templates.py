@@ -17,6 +17,7 @@ alerta útil e uma lista de ruído que ninguém lê.
 
 from __future__ import annotations
 
+import sys
 import re
 from pathlib import Path
 
@@ -35,7 +36,27 @@ SEMPRE_DISPONIVEIS = {
 
 
 def _env() -> Environment:
-    return Environment(loader=FileSystemLoader(TDIR))
+    """Ambiente com os MESMOS filtros e globais que a aplicação registra.
+
+    Um ambiente Jinja próprio não conhece `csrf_token`, `moeda`, `data` — e o
+    Jinja recusa compilar um template que use filtro desconhecido, com
+    TemplateAssertionError. O verificador então falhava por um motivo que não
+    tem nada a ver com o que ele verifica (variável de contexto ausente), e
+    quem lesse o traceback concluiria que os templates estavam quebrados.
+
+    Importar da aplicação mantém os dois lados em sincronia sozinhos: filtro
+    novo registrado em main.py passa a ser conhecido aqui sem editar nada.
+    """
+    env = Environment(loader=FileSystemLoader(TDIR))
+    try:
+        sys.path.insert(0, str(RAIZ))
+        from app.main import templates as app_templates
+        env.filters.update(app_templates.env.filters)
+        env.globals.update(app_templates.env.globals)
+    except Exception as exc:  # pragma: no cover - diagnóstico, não bloqueio
+        print(f"AVISO: não consegui carregar os filtros da aplicação ({exc}).")
+        print("       Filtros próprios do JARBAS serão reportados como ausentes.")
+    return env
 
 
 def _usos_perigosos(ast) -> set[str]:

@@ -16,6 +16,6 @@
   </form>
 </section>
 <section class="panel"><div class="panel-head"><h2>Base de clientes</h2><span>{{ clients|length }} cadastros</span></div>
-{% for c in clients %}<a class="list-row link" href="/clients/{{ c['id'] }}"><div><strong>{{ c['name'] }}</strong><small>{{ c['person_type'] or 'Cliente' }} · {{ c['document'] or 'sem CPF/CNPJ' }}</small></div><div class="right"><span>{{ c['phone'] }}</span><small>{{ c['email'] }}</small></div></a>{% else %}<p class="empty">Sem clientes cadastrados.</p>{% endfor %}
+{% for c in clients %}<a class="list-row link" href="/clients/{{ c['id'] }}"><div><strong>{{ c['name'] }}</strong><small>{{ c['person_type'] or 'Cliente' }} · {{ c['document'] or 'sem CPF/CNPJ' }}</small></div><div class="right"><span>{{ c['phone'] }}</span><small>{{ c['email'] }}</small></div></a>{% else %}<p class="empty">Sem clientes cadastrados. Preencha o formulário ao lado, ou deixe o <a href="/intake">Intake do PDF</a> criar o cliente a partir dos autos.</p>{% endfor %}
 </section></div>
 {% endblock %}

@@ -74,7 +74,7 @@
     {% for p in prazos %}
     <tr>
       <td><strong>{{ p['texto_prazo'] }}</strong></td>
-      <td>{{ p['due_date'] }}</td>
+      <td>{{ p['due_date']|data }}</td>
       <td>{{ p['title'] }}{% if p['doubled'] %} <em>(em dobro)</em>{% endif %}</td>
       <td>{{ p['case_number'] or p['case_title'] or '—' }}</td>
       <td>{{ p['legal_basis'] or '—' }}</td>
@@ -90,7 +90,7 @@
           <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
           <button type="submit">Cancelar</button>
         </form>
-        {% else %}{{ p['status'] }}{% if p['protocol_date'] %} em {{ p['protocol_date'] }}{% endif %}{% endif %}
+        {% else %}{{ p['status'] }}{% if p['protocol_date'] %} em {{ p['protocol_date']|data }}{% endif %}{% endif %}
       </td>
     </tr>
     {% else %}

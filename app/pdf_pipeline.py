@@ -384,9 +384,9 @@ def extract_pdf(
     if ocr_pages:
         note_parts.append(f"OCR local usado em {ocr_pages} página(s).")
     if status == "needs_ocr":
-        note_parts.append("Nenhum texto utilizável foi extraído; requer OCR local ou leitura direta pela OpenAI.")
+        note_parts.append("Nenhum texto utilizável foi extraído: o PDF é digitalizado (imagem). Instale o Tesseract para OCR local ou configure a chave da Anthropic.")
     elif status == "partial_ocr":
-        note_parts.append("Há páginas sem texto suficiente; o Copiloto deve complementar com o PDF original pela OpenAI.")
+        note_parts.append("Há páginas sem texto suficiente. Com a chave da Anthropic configurada, o Copiloto lê essas páginas direto do PDF original.")
     if max_pages and page_count > sampled:
         note_parts.append(f"Prévia amostral: {sampled} de {page_count} páginas.")
 

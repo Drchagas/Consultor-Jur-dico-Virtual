@@ -119,7 +119,7 @@ def intelligent_intake_upload(request: Request, file: UploadFile = File(...), an
             with db() as conn:
                 conn.execute(
                     "INSERT INTO usage_ledger (organization_id,user_id,kind,credits,description,created_at) VALUES (?,?, 'intake_ai',?,?,?)",
-                    (org["id"],user["id"],credits,f"Intake PDF — {parsed.get('ai_model') or 'OpenAI'}",datetime.now().isoformat(timespec="seconds")),
+                    (org["id"],user["id"],credits,f"Intake PDF — {parsed.get('ai_model') or 'Claude'}",datetime.now().isoformat(timespec="seconds")),
                 )
         c.log_action(request, f"Intake inteligente: PDF analisado — {file.filename} — {parsed.get('extraction_method','local')}")
         return RedirectResponse(f"/intake/{import_id}", status_code=303)
@@ -583,7 +583,7 @@ def ai_send_message(request:Request,thread_id:int,message:str=Form(...),csrf:str
         except Exception as exc:
             answer=f"A integração com o Claude apresentou erro: {friendly_error(exc)}"; model=model_name(); inp=out=0
     else:
-        answer="Integração OpenAI ainda não configurada. Abra Configurações → OpenAI, informe a API key e use o botão Testar conexão. Os módulos locais permanecem ativos."
+        answer="IA ainda não configurada. Abra Configurações, informe a chave da Anthropic (começa com sk-ant-) e use Testar conexão. O restante do sistema segue funcionando normalmente."
         model="local"; inp=out=0
     with db() as conn:
         conn.execute("INSERT INTO ai_messages (organization_id,thread_id,role,content,model,input_tokens,output_tokens,created_at) VALUES (?,?,'assistant',?,?,?,?,?)",(org["id"],thread_id,answer,model,inp,out,datetime.now().isoformat(timespec="seconds")))
@@ -632,8 +632,8 @@ def settings_openai_save(
         else:
             result=ai_test_connection()
         ai_save_local_config(api_key=key, legal_model=legal_model, intake_model=intake_model, routine_model=routine_model)
-        request.session["ai_flash"] = f"Conexão OpenAI validada e salva com sucesso ({result.model})."
-        c.log_action(request,"OpenAI API configurada/validada pelo Super Admin")
+        request.session["ai_flash"] = f"Chave da Anthropic validada e salva com sucesso ({result.model})."
+        c.log_action(request,"Chave da Anthropic configurada/validada pelo Super Admin")
         return RedirectResponse("/settings?ai_saved=1", status_code=303)
     except Exception as exc:
         request.session["ai_flash"] = f"A nova configuração NÃO foi aplicada porque o teste falhou: {str(exc)[:450]}"
@@ -650,9 +650,9 @@ def settings_openai_test(request: Request, csrf: str = Form("", alias="_csrf")):
         return RedirectResponse("/settings?ai_error=permission", status_code=303)
     try:
         result=ai_test_connection()
-        request.session["ai_flash"] = f"OpenAI conectada. Teste respondeu corretamente com {result.model}."
+        request.session["ai_flash"] = f"Claude conectado. O teste respondeu corretamente com {result.model}."
     except Exception as exc:
-        request.session["ai_flash"] = f"Falha no teste OpenAI: {str(exc)[:450]}"
+        request.session["ai_flash"] = f"Falha no teste do Claude: {friendly_error(exc)[:450]}"
     return RedirectResponse("/settings?ai_test=1", status_code=303)
 
 
@@ -665,8 +665,8 @@ def settings_openai_clear(request: Request, csrf: str = Form("", alias="_csrf"))
     if not _allow_secret_config(user):
         return RedirectResponse("/settings?ai_error=permission", status_code=303)
     ai_clear_local_api_key()
-    request.session["ai_flash"] = "Chave OpenAI removida desta instalação local."
-    c.log_action(request,"OpenAI API removida pelo Super Admin")
+    request.session["ai_flash"] = "Chave da Anthropic removida desta instalação local."
+    c.log_action(request,"Chave da Anthropic removida pelo Super Admin")
     return RedirectResponse("/settings?ai_cleared=1", status_code=303)
 
 @router.get("/search", response_class=HTMLResponse)

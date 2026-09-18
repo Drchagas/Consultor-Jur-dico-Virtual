@@ -130,6 +130,65 @@ templates.env.globals["csrf_token"] = csrf_token
 # o VERSION.txt.
 templates.env.globals["app_version"] = APP_VERSION
 
+
+# --------------------------------------------------------------------------
+# Formatação brasileira.
+#
+# O sistema exibia "R$ 25000.00" e "2026-09-18" — ponto decimal e data ISO,
+# que é como o Python serializa, não como o Brasil escreve. Num sistema que
+# mostra valor de causa, honorário e prazo lado a lado, isso não é questão de
+# estética: "R$ 25000.00" e "R$ 25.000,00" são lidos com esforço diferente, e
+# quem confere uma planilha de honorários às pressas erra a casa decimal.
+# Data em ISO tem o mesmo problema — 2026-09-18 exige tradução mental a cada
+# leitura, e um prazo lido errado é perda de prazo.
+# --------------------------------------------------------------------------
+
+def formatar_moeda(valor, simbolo: bool = True) -> str:
+    """1234.5 -> 'R$ 1.234,50'. Vazio e texto inválido viram travessão."""
+    if valor is None or valor == "":
+        return "—"
+    try:
+        n = float(valor)
+    except (TypeError, ValueError):
+        return "—"
+    # Troca ponto e vírgula em duas etapas para não embaralhar os separadores.
+    inteiro, _, decimal = f"{abs(n):,.2f}".partition(".")
+    corpo = inteiro.replace(",", ".") + "," + decimal
+    sinal = "-" if n < 0 else ""
+    return f"{sinal}R$ {corpo}" if simbolo else f"{sinal}{corpo}"
+
+
+def formatar_data(valor) -> str:
+    """'2026-09-18' ou datetime -> '18/09/2026'. Guarda o que não reconhece."""
+    if not valor:
+        return "—"
+    if isinstance(valor, (datetime, date)):
+        return valor.strftime("%d/%m/%Y")
+    texto = str(valor).strip()
+    try:
+        return date.fromisoformat(texto[:10]).strftime("%d/%m/%Y")
+    except ValueError:
+        # Não inventa formato: devolve como está, para o dado nunca sumir.
+        return texto
+
+
+def formatar_datahora(valor) -> str:
+    """'2026-09-18T14:30:05' -> '18/09/2026 14:30'."""
+    if not valor:
+        return "—"
+    if isinstance(valor, datetime):
+        return valor.strftime("%d/%m/%Y %H:%M")
+    texto = str(valor).strip().replace("T", " ")
+    try:
+        return datetime.fromisoformat(texto[:19]).strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return formatar_data(texto)
+
+
+templates.env.filters["moeda"] = formatar_moeda
+templates.env.filters["data"] = formatar_data
+templates.env.filters["datahora"] = formatar_datahora
+
 # Proteção simples de força bruta no MVP. Em escala, substituir por Redis/WAF.
 LOGIN_FAILURES: dict[str, list[float]] = {}
 

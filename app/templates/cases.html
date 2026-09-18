@@ -19,6 +19,6 @@
     <button>Cadastrar processo e indexar arquivos</button>
   </form>
 </section>
-<section class="panel"><div class="panel-head"><h2>Casos</h2><span>segregados por workspace</span></div>{% for c in cases %}<a class="list-row link" href="/cases/{{ c['id'] }}"><div><strong>{{ c['title'] }}</strong><small>{{ c['client_name'] or 'Sem cliente vinculado' }}</small></div><div class="right"><span class="badge {{ c['risk']|lower|replace('í','i') }}">{{ c['risk'] }}</span><small>{{ c['number'] or c['area'] }}</small></div></a>{% else %}<p class="empty">Sem casos cadastrados.</p>{% endfor %}</section>
+<section class="panel"><div class="panel-head"><h2>Casos</h2><span>segregados por workspace</span></div>{% for c in cases %}<a class="list-row link" href="/cases/{{ c['id'] }}"><div><strong>{{ c['title'] }}</strong><small>{{ c['client_name'] or 'Sem cliente vinculado' }}</small></div><div class="right"><span class="badge {{ c['risk']|lower|replace('í','i') }}">{{ c['risk'] }}</span><small>{{ c['number'] or c['area'] }}</small></div></a>{% else %}<p class="empty">Sem casos cadastrados. Use <a href="/intake">Importar PDF automaticamente</a> — o JARBAS lê os autos e preenche número, partes, classe e valor — ou preencha o formulário ao lado.</p>{% endfor %}</section>
 </div>
 {% endblock %}

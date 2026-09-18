@@ -558,7 +558,7 @@ def answer_question(question: str, excerpts: list[dict], case_meta: dict, pdf_pa
             if not excerpts:
                 raise
     if not excerpts:
-        return "NÃO LOCALIZADO NOS AUTOS FORNECIDOS. Nenhum trecho indexado correspondeu à pergunta. Se o PDF estiver digitalizado, conecte a OpenAI para leitura direta do arquivo."
+        return "NÃO LOCALIZADO NOS AUTOS FORNECIDOS. Nenhum trecho indexado correspondeu à pergunta. Se o PDF estiver digitalizado, configure a chave da Anthropic (CONFIGURAR_IA.cmd) ou instale o Tesseract para OCR local."
     context = format_context(excerpts)
     if ai_available():
         return call_ai(
@@ -594,7 +594,7 @@ def deep_analysis(excerpts: list[dict], case_meta: dict, matrix: dict, pdf_paths
             if not excerpts:
                 raise
     if not excerpts:
-        return "NÃO LOCALIZADO NOS AUTOS FORNECIDOS. Faça upload de documentos com texto extraível ou conecte a OpenAI para leitura direta de PDFs digitalizados."
+        return "NÃO LOCALIZADO NOS AUTOS FORNECIDOS. Envie documentos com texto extraível, ou configure a chave da Anthropic (CONFIGURAR_IA.cmd) para ler PDFs digitalizados."
     if ai_available():
         return call_ai(
             SYSTEM_RULES,

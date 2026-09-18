@@ -95,7 +95,7 @@
   </section>
   <section class="panel">
     <span class="eyebrow">Minutas</span><h2>Histórico do caso</h2>
-    {% for d in drafts %}<a class="list-row link" href="/cases/{{ case['id'] }}/drafts/{{ d['id'] }}"><div><strong>{{ d['draft_type'] }}</strong><small>{{ d['created_at'] }}</small></div><span>→</span></a>{% else %}<p class="empty">Nenhuma minuta criada.</p>{% endfor %}
+    {% for d in drafts %}<a class="list-row link" href="/cases/{{ case['id'] }}/drafts/{{ d['id'] }}"><div><strong>{{ d['draft_type'] }}</strong><small>{{ d['created_at']|datahora }}</small></div><span>→</span></a>{% else %}<p class="empty">Nenhuma minuta criada.</p>{% endfor %}
   </section>
 </div>
 
@@ -103,7 +103,7 @@
   <section class="panel">
     <div class="panel-head"><div><span class="eyebrow">Documentos</span><h2>Autos indexados</h2></div><form method="post" action="/cases/{{ case['id'] }}/documents/reindex-all"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="button secondary" type="submit">Reprocessar todos os PDFs</button></form></div>
 <div class="safe-note">Leitura local: PyMuPDF + pypdf + pdfplumber{% if ocr_status.local_ocr %} + OCR Tesseract{% endif %}. {% if ai_connected %}IA conectada: PDFs incompletos também são enviados diretamente ao Claude durante a análise.{% else %}IA externa não conectada.{% endif %}</div>
-    {% for d in documents %}<div class="document-row"><a href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}"><strong>{{ d['original_name'] }}</strong><small>{{ d['page_count'] }} pág. · {{ "%.1f"|format(d['size_bytes']/1048576) }} MB · {{ d['status'] }}</small>{% if d['extraction_note'] %}<em>{{ d['extraction_note'] }}</em>{% endif %}</a><div class="action-row"><a class="button mini" target="_blank" rel="noopener" href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/view">Abrir PDF</a><a class="button mini secondary" href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/download">Baixar</a><form method="post" action="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/reindex"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="button mini secondary" type="submit">Reprocessar leitura</button></form><form method="post" action="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/delete" onsubmit="return confirm('Remover este documento e seu índice?');"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="icon-danger" title="Remover">×</button></form></div></div>{% else %}<p class="empty">Nenhum PDF carregado.</p>{% endfor %}
+    {% for d in documents %}<div class="document-row"><a href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}"><strong>{{ d['original_name'] }}</strong><small>{{ d['page_count'] }} pág. · {{ "%.1f"|format(d['size_bytes']/1048576) }} MB · {{ d['status'] }}</small>{% if d['extraction_note'] %}<em>{{ d['extraction_note'] }}</em>{% endif %}</a><div class="action-row"><a class="button mini" target="_blank" rel="noopener" href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/view">Abrir PDF</a><a class="button mini secondary" href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/download">Baixar</a><form method="post" action="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/reindex"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="button mini secondary" type="submit">Reprocessar leitura</button></form><form method="post" action="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/delete" onsubmit="return confirm('Remover este documento e seu índice?');"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="icon-danger" title="Remover">×</button></form></div></div>{% else %}<p class="empty">Nenhum PDF carregado. Envie os autos nesta tela: o Copiloto só responde sobre documento que ele leu.</p>{% endfor %}
   </section>
   <section class="panel">
     <span class="eyebrow">Linha do tempo automática</span><h2>Eventos e atos detectados</h2>
@@ -111,5 +111,5 @@
   </section>
 </div>
 
-<section class="panel"><span class="eyebrow">Auditoria intelectual</span><h2>Atividades recentes do Copiloto</h2>{% for r in recent_runs %}<div class="list-row"><div><strong>{{ r['kind'] }}</strong><small>{{ r['question'] or 'Análise automática' }}</small></div><small>{{ r['created_at'] }}</small></div>{% else %}<p class="empty">Nenhuma análise registrada.</p>{% endfor %}</section>
+<section class="panel"><span class="eyebrow">Auditoria intelectual</span><h2>Atividades recentes do Copiloto</h2>{% for r in recent_runs %}<div class="list-row"><div><strong>{{ r['kind'] }}</strong><small>{{ r['question'] or 'Análise automática' }}</small></div><small>{{ r['created_at']|datahora }}</small></div>{% else %}<p class="empty">Nenhuma análise registrada.</p>{% endfor %}</section>
 {% endblock %}
