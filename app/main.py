@@ -158,6 +158,21 @@ def formatar_moeda(valor, simbolo: bool = True) -> str:
     return f"{sinal}R$ {corpo}" if simbolo else f"{sinal}{corpo}"
 
 
+def formatar_numero(valor, casas: int = 2) -> str:
+    """1234.5 -> '1.234,50'. Para o que NÃO é dinheiro: tamanho, horas, taxa."""
+    if valor is None or valor == "":
+        return "—"
+    try:
+        n = float(valor)
+    except (TypeError, ValueError):
+        return "—"
+    inteiro, _, decimal = f"{abs(n):,.{casas}f}".partition(".")
+    corpo = inteiro.replace(",", ".")
+    if casas:
+        corpo += "," + decimal
+    return ("-" if n < 0 else "") + corpo
+
+
 def formatar_data(valor) -> str:
     """'2026-09-18' ou datetime -> '18/09/2026'. Guarda o que não reconhece."""
     if not valor:
@@ -186,6 +201,7 @@ def formatar_datahora(valor) -> str:
 
 
 templates.env.filters["moeda"] = formatar_moeda
+templates.env.filters["numero"] = formatar_numero
 templates.env.filters["data"] = formatar_data
 templates.env.filters["datahora"] = formatar_datahora
 

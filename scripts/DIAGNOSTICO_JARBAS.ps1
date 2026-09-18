@@ -15,11 +15,35 @@ if(Test-Path $Python){try{Add "Python: $(& $Python --version 2>&1)"}catch{Add "P
 $Pth=Get-ChildItem (Join-Path $Root 'runtime') -Filter 'python*._pth' -ErrorAction SilentlyContinue|Select-Object -First 1
 if($Pth){Add '--- python _pth ---';Get-Content $Pth.FullName|ForEach-Object{Add $_}}
 $Port=''
-if(Test-Path $EnvFile){Add '--- configuracao (segredos omitidos) ---';Get-Content $EnvFile|ForEach-Object{if($_ -match '^OPENAI_API_KEY='){Add 'OPENAI_API_KEY=[CONFIGURADA/OCULTA]'}elseif($_ -match '^JARBAS_SECRET_KEY='){Add 'JARBAS_SECRET_KEY=[OCULTA]'}else{Add $_};if($_ -match '^JARBAS_PORT=(\d+)'){$Port=$Matches[1]}}}
+# Qualquer chave e mascarada por PADRAO. A lista anterior citava
+# OPENAI_API_KEY, que a 9.0 nem usa, e deixava a ANTHROPIC_API_KEY passar
+# inteira - num arquivo cuja finalidade e ser enviado ao suporte.
+if(Test-Path $EnvFile){
+  Add '--- configuracao (segredos omitidos) ---'
+  Get-Content $EnvFile|ForEach-Object{
+    if($_ -match '^\s*([A-Z0-9_]*(KEY|TOKEN|SECRET|PASSWORD|SENHA)[A-Z0-9_]*)\s*=\s*(.*)$'){
+      $nome=$Matches[1];$valor=$Matches[3]
+      if($valor.Trim()){Add ($nome+'=[CONFIGURADA/OCULTA, '+$valor.Trim().Length+' caracteres]')}
+      else{Add ($nome+'=[VAZIA]')}
+    }else{Add $_}
+    if($_ -match '^JARBAS_PORT=(\d+)'){$Port=$Matches[1]}
+  }
+}
+# Variavel de ambiente do Windows VENCE o .env.local: o app usa
+# load_dotenv(override=False). Sem esta checagem, o operador corrige o arquivo,
+# nada muda, e nao ha como adivinhar por que.
+Add '--- chave de IA no ambiente do Windows (vence o .env.local) ---'
+foreach($escopo in @('Process','User','Machine')){
+  try{
+    $v=[Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY',$escopo)
+    if($v){Add ("ANTHROPIC_API_KEY em "+$escopo+" = [DEFINIDA, "+$v.Trim().Length+" caracteres, comeca com '"+$v.Trim().Substring(0,[Math]::Min(7,$v.Trim().Length))+"']")}
+    else{Add ("ANTHROPIC_API_KEY em "+$escopo+" = (nao definida)")}
+  }catch{Add ("ANTHROPIC_API_KEY em "+$escopo+" = (nao foi possivel ler)")}
+}
 if(Test-Path $Python){
  Add '--- sys.path / imports ---'
  $env:JARBAS_ROOT=$Root
- try{(& $Python -c "import sys; print('SYS_PATH='+repr(sys.path)); import app.main; print('IMPORT_APP_OK'); import openai; print('OPENAI_SDK='+openai.__version__)" 2>&1)|ForEach-Object{Add "$_"}}catch{Add "IMPORT ERRO: $($_.Exception.Message)"}
+ try{(& $Python -c "import sys; print('SYS_PATH='+repr(sys.path)); import app.main; print('IMPORT_APP_OK'); import anthropic; print('ANTHROPIC_SDK='+getattr(anthropic,'__version__','?'))" 2>&1)|ForEach-Object{Add "$_"}}catch{Add "IMPORT ERRO: $($_.Exception.Message)"}
  Add '--- banco ---'
  try{(& $Python (Join-Path $Root 'tools\diagnose_db.py') 2>&1)|ForEach-Object{Add "$_"}}catch{Add "DB CHECK ERRO: $($_.Exception.Message)"}
  Add '--- diagnostico de PDFs / OCR / OpenAI ---'

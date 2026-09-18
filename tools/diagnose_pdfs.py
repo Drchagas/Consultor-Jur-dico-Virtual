@@ -7,9 +7,9 @@ from app.copilot import resolve_uploaded_pdf_path
 from app.pdf_pipeline import extract_pdf, ocr_capability
 from app.ai_gateway import connection_status
 
-print('--- PDF ENGINE 8.3.1 ---')
+print('--- PDF ENGINE ---')
 print('OCR_LOCAL=',ocr_capability())
-print('OPENAI=',connection_status())
+print('IA=',connection_status())
 with db() as conn:
     rows=conn.execute("SELECT id,organization_id,case_id,original_name,stored_name,stored_path,status,page_count,text_chars,extraction_note FROM case_documents ORDER BY id DESC LIMIT 100").fetchall()
     print('DOCUMENTOS=',len(rows))

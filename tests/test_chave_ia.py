@@ -196,3 +196,40 @@ def test_configurar_ia_nao_se_anuncia_como_openai():
     linhas = [l for l in fonte.splitlines()
               if "Write-Host" in l and "OPENAI" in l.upper()]
     assert not linhas, "o assistente ainda se apresenta como OpenAI:\n" + "\n".join(linhas)
+
+
+# ================================== o diagnóstico não pode vazar a chave
+
+def test_o_diagnostico_geral_mascara_qualquer_chave():
+    """O arquivo do diagnóstico existe para ser ENVIADO ao suporte.
+
+    A versão anterior mascarava OPENAI_API_KEY — que a 9.0 nem usa — e deixava
+    a ANTHROPIC_API_KEY passar inteira. Quem seguisse a instrução de mandar o
+    diagnóstico entregaria a própria chave junto.
+    """
+    fonte = _ps1("DIAGNOSTICO_JARBAS.ps1")
+    assert "KEY|TOKEN|SECRET|PASSWORD" in fonte, (
+        "o diagnóstico precisa mascarar QUALQUER variável de segredo, não uma lista"
+    )
+    assert "OPENAI_API_KEY=[CONFIGURADA/OCULTA]" not in fonte, (
+        "a lista fixa antiga deixava a chave da Anthropic passar em claro"
+    )
+
+
+def test_o_diagnostico_mostra_a_chave_do_ambiente_do_windows():
+    """Variável do Windows vence o .env.local e some do diagnóstico.
+
+    O app usa load_dotenv(override=False). Com a chave definida no ambiente do
+    Windows e o .env.local vazio, o operador corrige o arquivo, nada muda, e
+    não há no relatório nada que explique por quê.
+    """
+    fonte = _ps1("DIAGNOSTICO_JARBAS.ps1")
+    assert "GetEnvironmentVariable('ANTHROPIC_API_KEY'" in fonte
+    for escopo in ("Process", "User", "Machine"):
+        assert escopo in fonte, f"falta conferir o escopo {escopo}"
+
+
+def test_o_diagnostico_reporta_o_sdk_certo():
+    fonte = _ps1("DIAGNOSTICO_JARBAS.ps1")
+    assert "import anthropic" in fonte
+    assert "import openai" not in fonte, "a 9.0 não usa o SDK da OpenAI"
