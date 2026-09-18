@@ -69,6 +69,19 @@ try:
 except OSError:
     APP_VERSION = "0.0.0"
 
+# Identificador do build. Duas instalações podem declarar a MESMA versão e
+# ter conteúdo diferente; o build não repete. Sem ele não há como responder
+# "qual pacote está instalado?" — e essa pergunta já custou uma rodada
+# inteira de correção, com a instalação falhando por um defeito que já estava
+# corrigido no pacote que não havia sido aplicado.
+try:
+    _carimbo = (BASE_DIR / "BUILD.txt").read_text(encoding="utf-8")
+    APP_BUILD = next(
+        (l.split(":", 1)[1].strip() for l in _carimbo.splitlines()
+         if l.lower().startswith("build")), "desconhecido")
+except OSError:
+    APP_BUILD = "desenvolvimento"
+
 app = FastAPI(title="JARBAS Jurídico — Plataforma + Copiloto", version=APP_VERSION, docs_url=None if APP_ENV == "production" else "/docs")
 allowed_hosts = [h.strip() for h in os.getenv("JARBAS_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts or ["localhost"])
@@ -129,6 +142,7 @@ templates.env.globals["csrf_token"] = csrf_token
 # ao suporte — lia a versão errada. Agora sai da mesma fonte que /health:
 # o VERSION.txt.
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.globals["app_build"] = APP_BUILD
 
 
 # --------------------------------------------------------------------------
@@ -805,7 +819,9 @@ def health():
     """Endpoint mínimo para health-check de containers e balanceadores."""
     with db() as conn:
         conn.execute("SELECT 1").fetchone()
-    return {"status": "ok", "product": "JARBAS Jurídico Principal", "version": APP_VERSION, "ai": "connected" if ai_available() else "local"}
+    return {"status": "ok", "product": "JARBAS Jurídico Principal",
+            "version": APP_VERSION, "build": APP_BUILD,
+            "ai": "connected" if ai_available() else "local"}
 
 
 def current_user(request: Request):

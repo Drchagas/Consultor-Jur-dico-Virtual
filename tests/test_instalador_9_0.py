@@ -168,3 +168,49 @@ def test_nenhum_teste_derruba_a_coleta_com_systemexit():
         + "\n".join(problemas)
         + "\nUse pytest.skip(..., allow_module_level=True)."
     )
+
+
+# ================================================ identidade do build
+
+def test_o_pacote_carrega_um_carimbo_de_build():
+    """Dois pacotes diziam "9.0.2" e não havia como distingui-los.
+
+    Isso custou uma rodada inteira de correção: o operador extraiu o pacote
+    antigo, a instalação falhou com um defeito JÁ corrigido, e nem ele nem eu
+    tínhamos como perceber, olhando o diagnóstico, que o pacote aplicado não
+    era o enviado.
+    """
+    montador = _RAIZ / "tools" / "build_installer.py"
+    if not montador.is_file():
+        pytest.skip("sem tools/ neste layout")
+    fonte = montador.read_text(encoding="utf-8")
+    assert "_gravar_carimbo" in fonte, "o pacote precisa carregar identidade própria"
+    assert "BUILD.txt" in fonte
+
+
+def test_o_carimbo_entra_no_manifesto():
+    """Arquivo fora do manifesto faz o passo [1/19] abortar a instalação."""
+    montador = _RAIZ / "tools" / "build_installer.py"
+    if not montador.is_file():
+        pytest.skip("sem tools/ neste layout")
+    fonte = montador.read_text(encoding="utf-8")
+    pos_carimbo = fonte.index("_gravar_carimbo(destino)")
+    pos_manifesto = fonte.index("_gravar_manifesto(destino)")
+    assert pos_carimbo < pos_manifesto, (
+        "o carimbo tem de ser escrito ANTES do manifesto, senão fica fora dele"
+    )
+
+
+def test_o_instalador_leva_o_carimbo_para_a_instalacao():
+    assert "'BUILD.txt'" in FONTE, (
+        "sem copiar o BUILD.txt, a instalação não sabe de qual pacote veio"
+    )
+
+
+def test_o_diagnostico_mostra_o_build_instalado():
+    fonte = (SCRIPTS / "DIAGNOSTICO_JARBAS.ps1").read_text(encoding="utf-8-sig")
+    assert "BUILD.txt" in fonte
+    assert "build instalado" in fonte
+    assert "AUSENTE" in fonte, (
+        "instalação sem carimbo precisa ser reportada, não passar em branco"
+    )

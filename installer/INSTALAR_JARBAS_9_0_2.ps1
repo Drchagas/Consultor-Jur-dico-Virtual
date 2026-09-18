@@ -93,7 +93,7 @@ try{
   Copy-Item (Join-Path $Payload 'app') -Destination $InstallDir -Recurse -Force;Copy-Item $ToolsSource -Destination $InstallDir -Recurse -Force;$TestsSource=Join-Path $SourceDir 'tests';if(Test-Path $TestsSource){Copy-Item $TestsSource -Destination $InstallDir -Recurse -Force}
   foreach($f in Get-ChildItem $ScriptsSource -Filter '*.ps1'){Copy-Item $f.FullName (Join-Path $InstallDir $f.Name) -Force}
   $ocrSrc=Join-Path $SourceDir 'ocr';if(Test-Path $ocrSrc){$ocrDst=Join-Path $InstallDir 'installer\ocr';New-Item -ItemType Directory -Force -Path $ocrDst|Out-Null;Copy-Item (Join-Path $ocrSrc '*') $ocrDst -Recurse -Force}
-  foreach($name in @('requirements.txt','requirements-ia.txt','VERSION.txt','LICENSE_PROPRIETARY.txt','README.md','AUDITORIA_8_3.md','AUDITORIA_8_3_1.md','SEGURANCA_LGPD_IA.md','MATRIZ_SISTEMA_PRINCIPAL.md','MATRIZ_FUNCIONAL_7_0.md','ARQUITETURA_SAAS_7_0.md','ROADMAP_PRODUCAO.md','CONSELHO_IA.md','CAPACIDADE_2000_ASSINANTES.md','NOTAS_DA_VERSAO_9_0_2.txt')){$src=Join-Path $Payload $name;if(Test-Path $src){Copy-Item $src -Destination $InstallDir -Force}}
+  foreach($name in @('requirements.txt','requirements-ia.txt','VERSION.txt','BUILD.txt','LICENSE_PROPRIETARY.txt','README.md','AUDITORIA_8_3.md','AUDITORIA_8_3_1.md','SEGURANCA_LGPD_IA.md','MATRIZ_SISTEMA_PRINCIPAL.md','MATRIZ_FUNCIONAL_7_0.md','ARQUITETURA_SAAS_7_0.md','ROADMAP_PRODUCAO.md','CONSELHO_IA.md','CAPACIDADE_2000_ASSINANTES.md','NOTAS_DA_VERSAO_9_0_2.txt')){$src=Join-Path $Payload $name;if(Test-Path $src){Copy-Item $src -Destination $InstallDir -Force}}
   if(Test-Path (Join-Path $preserve 'workspaces')){Merge-Dir (Join-Path $preserve 'workspaces') (Join-Path $InstallDir 'app\static\workspaces')}
 
   Say '[5/19] Preparando Python portatil 3.12...' Cyan

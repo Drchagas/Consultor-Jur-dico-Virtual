@@ -13,7 +13,12 @@ $Python=Join-Path $Root 'runtime\python.exe'
 $EnvFile=Join-Path $Root '.env.local'
 if(Test-Path $Python){try{Add "Python: $(& $Python --version 2>&1)"}catch{Add "Python ERRO: $($_.Exception.Message)"}}else{Add 'Python: AUSENTE'}
 $Pth=Get-ChildItem (Join-Path $Root 'runtime') -Filter 'python*._pth' -ErrorAction SilentlyContinue|Select-Object -First 1
-if($Pth){Add '--- python _pth ---';Get-Content $Pth.FullName|ForEach-Object{Add $_}}
+if($Pth){# O build responde "qual pacote esta instalado?". Sem ele, dois pacotes
+# diferentes se apresentam como 9.0.2 e a pergunta fica sem resposta.
+$BuildFile=Join-Path $Root 'BUILD.txt'
+if(Test-Path $BuildFile){Add '--- build instalado ---';Get-Content $BuildFile|Select-Object -First 3|ForEach-Object{Add $_}}
+else{Add '--- build instalado ---';Add 'BUILD.txt AUSENTE: instalacao anterior a este controle, ou extracao incompleta.'}
+Add '--- python _pth ---';Get-Content $Pth.FullName|ForEach-Object{Add $_}}
 $Port=''
 # Qualquer chave e mascarada por PADRAO. A lista anterior citava
 # OPENAI_API_KEY, que a 9.0 nem usa, e deixava a ANTHROPIC_API_KEY passar

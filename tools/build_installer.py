@@ -106,10 +106,61 @@ def montar(destino: Path) -> Path:
     if leia.is_file():
         shutil.copy2(leia, destino / "LEIA_PRIMEIRO.txt")
 
-    # 7. Manifesto — caminhos relativos com barra invertida (Join-Path do Windows)
+    # 7. Carimbo do build ANTES do manifesto, para entrar nele.
+    _gravar_carimbo(destino)
+
+    # 8. Manifesto — caminhos relativos com barra invertida (Join-Path do Windows)
     _gravar_manifesto(destino)
 
     return destino
+
+
+def _gravar_carimbo(destino: Path) -> str:
+    """Identidade única deste build, dentro do pacote e da instalação.
+
+    Dois pacotes diferentes diziam "9.0.2" e não havia como distingui-los.
+    Num ciclo de correção — enviar o pacote, o operador extrair, instalar,
+    mandar o diagnóstico — isso custou uma rodada inteira: a instalação
+    falhou com o MESMO erro já corrigido, e nem o operador nem eu tínhamos
+    como saber, olhando o diagnóstico, que o pacote aplicado era o antigo.
+
+    O carimbo responde "qual build está instalado?" sem depender da memória
+    de ninguém.
+    """
+    import subprocess
+    from datetime import datetime, timezone
+
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                                cwd=RAIZ, capture_output=True, text=True).stdout.strip()
+    except Exception:
+        commit = ""
+    sujo = ""
+    try:
+        if subprocess.run(["git", "status", "--porcelain"], cwd=RAIZ,
+                          capture_output=True, text=True).stdout.strip():
+            sujo = " (com alterações não commitadas)"
+    except Exception:
+        pass
+
+    carimbo = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    linhas = [
+        f"JARBAS Juridico Enterprise {VERSAO}",
+        f"build.....: {carimbo} UTC",
+        f"commit....: {commit or 'desconhecido'}{sujo}",
+        "",
+        "Este arquivo identifica ESTE pacote. Dois pacotes podem ter a mesma",
+        "versao e conteudo diferente; o build nao repete.",
+        "",
+        "Confira o que esta instalado com DIAGNOSTICO_JARBAS.cmd ou em /health.",
+        "Se o build da instalacao nao for o do pacote que voce extraiu, a",
+        "extracao nao substituiu os arquivos: extraia de novo, por cima, e",
+        "confirme quando o Windows perguntar se quer substituir.",
+    ]
+    texto = "\r\n".join(linhas) + "\r\n"
+    (destino / "BUILD.txt").write_text(texto, encoding="utf-8")
+    (destino / "payload" / "BUILD.txt").write_text(texto, encoding="utf-8")
+    return carimbo
 
 
 def _gravar_manifesto(destino: Path) -> None:
