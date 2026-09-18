@@ -62,7 +62,7 @@
     {% if classificacao.processo %}<p class="caution">Processo citado pelo contato: {{ classificacao.processo }} — confira nos autos antes de responder sobre andamento.</p>{% endif %}
     {% endif %}
 
-    <div class="chat-stream">
+    <div class="chat-stream atendimento-stream">
       {% for m in mensagens %}
         <div class="chat-msg {{ m['role'] }}">
           <span>{{ 'JARBAS' if m['role'] == 'assistant' else 'Contato' }}</span>
@@ -124,7 +124,7 @@
 </div>
 
 <div class="panel">
-  <div class="feature-list">
+  <div class="feature-list travas">
     <div><b>Zero invenção</b><span>o chatbot não cita jurisprudência, súmula, processo ou doutrina no atendimento, e o texto produzido é relido atrás de promessa de resultado, promessa de prazo judicial e valor inventado</span></div>
     <div><b>Risco</b><span>prisão, flagrante, medida protetiva, prazo vencendo e leilão marcado sobem a conversa para o topo da fila e acionam o advogado fora da ordem normal</span></div>
     <div><b>LGPD</b><span>só o necessário à triagem; o resumo que vai ao CRM tem CPF, CNPJ, telefone, e-mail e cartão mascarados</span></div>
