@@ -1,0 +1,115 @@
+{% extends "base.html" %}{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">JARBAS 8.3.1 · Copiloto Jurídico</span><h1>{{ case['title'] }}</h1><p>{{ case['number'] or 'Sem número' }} · análise ancorada nos autos</p></div>
+  <div class="action-row"><span class="ai-status {{ 'on' if ai_connected else 'off' }}">● {{ ('IA conectada · ' ~ ai_model_name) if ai_connected else 'Modo documental local' }}</span><a class="button secondary" href="/cases/{{ case['id'] }}">Voltar ao processo</a></div>
+</div>
+
+<div class="stats copilot-stats">
+  <div class="stat"><span>PDFs</span><b>{{ document_stats.documents }}</b><small>documentos carregados</small></div>
+  <div class="stat"><span>Páginas</span><b>{{ document_stats.pages }}</b><small>identificadas</small></div>
+  <div class="stat"><span>Chunks</span><b>{{ document_stats.chunks }}</b><small>trechos pesquisáveis</small></div>
+  <div class="stat"><span>OCR pendente</span><b>{{ document_stats.needs_ocr }}</b><small>arquivos sem texto</small></div>
+</div>
+
+{% if upload_ok or upload_error %}<div class="alert {{ 'success-box' if upload_ok and not upload_error else 'warning-box' }}">Upload: {{ upload_ok or 0 }} arquivo(s) processado(s); {{ upload_error or 0 }} alerta(s).</div>{% endif %}
+{% if upload_error_details %}<div class="alert warning-box"><strong>Detalhes do upload:</strong><ul>{% for msg in upload_error_details %}<li>{{ msg }}</li>{% endfor %}</ul></div>{% endif %}
+{% if upload_notices %}<div class="alert success-box"><strong>Informações do upload:</strong><ul>{% for msg in upload_notices %}<li>{{ msg }}</li>{% endfor %}</ul></div>{% endif %}
+{% if reindex_all %}<div class="alert success-box"><strong>Leitura integral refeita.</strong> Resultado (processados-ausentes-falhas): {{ reindex_all }}.</div>{% endif %}
+{% if document_stats.needs_ocr %}
+  {% if ai_connected %}<div class="alert warning-box"><strong>{{ document_stats.needs_ocr }} PDF(s) com leitura local incompleta.</strong> A OpenAI está conectada: o Copiloto foi configurado para consultar também o PDF original nas análises, perguntas, Hard Truth e minutas.</div>
+  {% elif ocr_status.local_ocr %}<div class="alert warning-box"><strong>{{ document_stats.needs_ocr }} PDF(s) precisam de OCR.</strong> OCR local detectado ({{ ocr_status.engine }}). Use “Reprocessar todos os PDFs” para tentar extrair as páginas digitalizadas.</div>
+  {% else %}<div class="alert danger"><strong>{{ document_stats.needs_ocr }} PDF(s) não têm texto suficiente.</strong> Sem OCR local e sem OpenAI conectada, nenhuma IA consegue analisar essas páginas com segurança. Configure a OpenAI ou instale Tesseract e reprocese os autos.</div>{% endif %}
+{% endif %}
+
+<div class="grid2 copilot-top-grid">
+  <section class="panel upload-panel">
+    <span class="eyebrow">1 · Alimentar os autos</span><h2>Upload do processo</h2>
+    <p class="muted">Envie o PDF integral do eproc/PJe/Projudi ou documentos separados. O JARBAS preserva o arquivo, extrai o texto página a página e cria índice interno.</p>
+    <form method="post" action="/cases/{{ case['id'] }}/documents" enctype="multipart/form-data" class="form-stack">
+      <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+      <label class="drop-zone">PDF(s) do processo<input type="file" name="files" accept="application/pdf,.pdf" multiple required></label>
+      <button>Enviar e indexar autos</button>
+    </form>
+    <div class="safe-note">🔒 Isolamento por escritório e processo. O JARBAS tenta PyMuPDF, pypdf e pdfplumber. Páginas digitalizadas usam OCR local quando Tesseract estiver disponível; com OpenAI conectada, o Copiloto também lê o PDF original diretamente.</div>
+  </section>
+
+  <section class="panel measure-panel">
+    <span class="eyebrow">2 · Diagnóstico processual</span><h2>Hipótese de providência</h2>
+    <div class="measure-title">{{ measure.title }}</div>
+    <div class="confidence">Confiança: <strong>{{ measure.confidence }}</strong></div>
+    <p>{{ measure.reason }}</p>
+    {% for c in measure.cautions %}<div class="caution">⚠ {{ c }}</div>{% endfor %}
+    {% if measure.sources %}<div class="source-list mini-sources">{% for s in measure.sources %}<span>{{ s.citation }}</span>{% endfor %}</div>{% endif %}
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="panel ask-panel">
+    <span class="eyebrow">3 · Pergunte aos Autos</span><h2>Faça uma pergunta jurídica ou factual</h2>
+    <form method="post" action="/cases/{{ case['id'] }}/copilot/ask" class="form-stack">
+      <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+      <textarea name="question" rows="4" required placeholder="Ex.: O autor comprovou o pagamento? Onde está a última intimação? Há contradição entre o laudo e os documentos?"></textarea>
+      <button>Pesquisar nos autos e responder</button>
+    </form>
+    <div class="prompt-suggestions"><span>Experimente:</span><a href="#">Qual foi o fundamento da última decisão?</a><a href="#">Onde está a prova do pagamento?</a><a href="#">Quais pontos estão contra meu cliente?</a></div>
+  </section>
+  <section class="panel action-panel">
+    <span class="eyebrow">4 · Estratégia</span><h2>Ferramentas do Copiloto</h2>
+    <form method="post" action="/cases/{{ case['id'] }}/copilot/analyze"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="full">✦ Análise estratégica dos autos</button></form>
+    <form method="post" action="/cases/{{ case['id'] }}/copilot/hard-truth"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="full danger-button">⚠ Hard Truth — procurar fragilidades</button></form>
+    <div class="safe-note">A análise separa fatos localizados, inferências, riscos e pontos a confirmar. Jurisprudência não validada não é criada automaticamente.</div>
+  </section>
+</div>
+
+{% if answer %}
+<section class="panel copilot-result">
+  <span class="eyebrow">Resposta aos autos</span><h2>{{ answer.question }}</h2>
+  <div class="legal-output">{{ answer.text }}</div>
+  <h3>Trechos utilizados</h3>
+  <div class="source-grid">{% for s in answer.sources %}<div class="source-card"><b>{{ s.citation }}</b><span>{{ s.label }}</span><p>{{ s.snippet }}</p></div>{% else %}<p class="empty">Nenhum trecho correspondente localizado.</p>{% endfor %}</div>
+</section>
+{% endif %}
+
+{% if deep_result %}
+<section class="panel copilot-result"><span class="eyebrow">Análise estratégica</span><h2>Diagnóstico aprofundado</h2><div class="legal-output">{{ deep_result }}</div></section>
+{% endif %}
+
+{% if hard_truth_result %}
+<section class="panel hard-truth-box">
+  <span class="eyebrow">Hard Truth</span><h2>{{ hard_truth_result.level }}</h2><p>{{ hard_truth_result.note }}</p>
+  {% for f in hard_truth_result.findings %}<div class="risk-finding"><div><strong>{{ f.terms|join(', ') }}</strong><span>{{ f.citation }}</span></div><p>{{ f.snippet }}</p></div>{% else %}<div class="safe-note">Nenhum termo adverso forte foi localizado pelo filtro textual. Isso não significa ausência de risco.</div>{% endfor %}
+  {% if hard_truth_result.ai_text %}<h3>Análise crítica da IA</h3><div class="legal-output">{{ hard_truth_result.ai_text }}</div>{% endif %}
+</section>
+{% endif %}
+
+<div class="grid2">
+  <section class="panel">
+    <span class="eyebrow">5 · Petição</span><h2>Gerar minuta cabível</h2>
+    <form method="post" action="/cases/{{ case['id'] }}/copilot/draft" class="form-stack">
+      <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+      <label>Tipo de peça<select name="draft_type"><option>Manifestação pertinente aos autos</option><option>Réplica / impugnação</option><option>Manifestação sobre laudo pericial</option><option>Embargos de declaração</option><option>Apelação</option><option>Contrarrazões</option><option>Agravo de instrumento</option><option>Memoriais</option><option>Petição intermediária</option></select></label>
+      <label>Objetivo estratégico<textarea name="objective" placeholder="Ex.: impugnar o laudo por inconsistência entre radiografia e tomografia; enfatizar ausência de nexo causal..."></textarea></label>
+      <button>Gerar peça completa + PDF institucional</button>
+    </form>
+    <div class="safe-note">A peça utiliza os dados cadastrados das partes, advogado e escritório, cita as páginas usadas e gera automaticamente PDF institucional com o logotipo do workspace. Onde faltar informação, o sistema marca para conferência em vez de inventar.</div>
+  </section>
+  <section class="panel">
+    <span class="eyebrow">Minutas</span><h2>Histórico do caso</h2>
+    {% for d in drafts %}<a class="list-row link" href="/cases/{{ case['id'] }}/drafts/{{ d['id'] }}"><div><strong>{{ d['draft_type'] }}</strong><small>{{ d['created_at'] }}</small></div><span>→</span></a>{% else %}<p class="empty">Nenhuma minuta criada.</p>{% endfor %}
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="panel">
+    <div class="panel-head"><div><span class="eyebrow">Documentos</span><h2>Autos indexados</h2></div><form method="post" action="/cases/{{ case['id'] }}/documents/reindex-all"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="button secondary" type="submit">Reprocessar todos os PDFs</button></form></div>
+<div class="safe-note">Leitura local: PyMuPDF + pypdf + pdfplumber{% if ocr_status.local_ocr %} + OCR Tesseract{% endif %}. {% if ai_connected %}IA conectada: PDFs incompletos também são enviados diretamente à OpenAI durante a análise.{% else %}IA externa não conectada.{% endif %}</div>
+    {% for d in documents %}<div class="document-row"><a href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}"><strong>{{ d['original_name'] }}</strong><small>{{ d['page_count'] }} pág. · {{ "%.1f"|format(d['size_bytes']/1048576) }} MB · {{ d['status'] }}</small>{% if d['extraction_note'] %}<em>{{ d['extraction_note'] }}</em>{% endif %}</a><div class="action-row"><a class="button mini" target="_blank" rel="noopener" href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/view">Abrir PDF</a><a class="button mini secondary" href="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/download">Baixar</a><form method="post" action="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/reindex"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="button mini secondary" type="submit">Reprocessar leitura</button></form><form method="post" action="/cases/{{ case['id'] }}/documents/{{ d['id'] }}/delete" onsubmit="return confirm('Remover este documento e seu índice?');"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="icon-danger" title="Remover">×</button></form></div></div>{% else %}<p class="empty">Nenhum PDF carregado.</p>{% endfor %}
+  </section>
+  <section class="panel">
+    <span class="eyebrow">Linha do tempo automática</span><h2>Eventos e atos detectados</h2>
+    <div class="timeline">{% for t in timeline %}<div class="timeline-item"><div class="timeline-dot"></div><div><strong>{{ t.event or t.label }}</strong><small>{{ t.date }} · {{ t.document }} · p. {{ t.page }}</small><p>{{ t.snippet }}</p></div></div>{% else %}<p class="empty">Linha do tempo ainda não disponível.</p>{% endfor %}</div>
+  </section>
+</div>
+
+<section class="panel"><span class="eyebrow">Auditoria intelectual</span><h2>Atividades recentes do Copiloto</h2>{% for r in recent_runs %}<div class="list-row"><div><strong>{{ r['kind'] }}</strong><small>{{ r['question'] or 'Análise automática' }}</small></div><small>{{ r['created_at'] }}</small></div>{% else %}<p class="empty">Nenhuma análise registrada.</p>{% endfor %}</section>
+{% endblock %}

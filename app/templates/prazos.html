@@ -1,0 +1,105 @@
+{% extends "base.html" %}{% block title %}Prazos — JARBAS{% endblock %}{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">Controle processual</span>
+    <h1>Prazos</h1>
+    <p>Contagem em dias úteis conforme o art. 219 do CPC, com recesso forense (art. 220) e feriados de {{ uf }}.</p>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="table-wrap"><table>
+    <tr>
+      <th>Vencidos</th><th>Vencem hoje</th><th>Até 2 dias úteis</th><th>Até 5 dias úteis</th><th>Demais</th>
+    </tr>
+    <tr>
+      <td><strong>{{ contagem['vencido'] }}</strong></td>
+      <td><strong>{{ contagem['hoje'] }}</strong></td>
+      <td><strong>{{ contagem['critico'] }}</strong></td>
+      <td>{{ contagem['atencao'] }}</td>
+      <td>{{ contagem['normal'] }}</td>
+    </tr>
+  </table></div>
+  {% if contagem['vencido'] or contagem['hoje'] %}
+  <p class="alert"><strong>Atenção:</strong> há prazo vencido ou vencendo hoje. Confira antes de qualquer outra coisa.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Novo prazo</h2>
+  <form method="post" action="/prazos/criar">
+    <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+    <label>Processo
+      <select name="case_id">
+        <option value="">— sem processo vinculado —</option>
+        {% for c in casos %}<option value="{{ c['id'] }}">{{ c['number'] or ('#' ~ c['id']) }} — {{ c['title'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Tipo de prazo
+      <select name="term_type">
+        <option value="">— informar dias manualmente —</option>
+        {% for t in catalogo %}<option value="{{ t.codigo }}">{{ t.nome }} — {{ t.dias }} {{ 'úteis' if t.uteis else 'corridos' }} ({{ t.fundamento }})</option>{% endfor %}
+      </select>
+    </label>
+    <label>Termo inicial (data da intimação)
+      <input type="date" name="start_date" value="{{ hoje }}" required>
+    </label>
+    <label>Dias (só se não escolheu o tipo acima) <input type="number" name="days" min="1" max="3650"></label>
+    <label><input type="checkbox" name="business_days" value="1" checked> Contar em dias úteis (art. 219)</label>
+    <label><input type="checkbox" name="doubled" value="1"> Prazo em dobro (Fazenda, Defensoria, art. 229)</label>
+    <label>Alertar com quantos dias úteis de antecedência
+      <input type="number" name="alert_days" value="3" min="0" max="30">
+    </label>
+    <label>Responsável
+      <select name="responsible_user_id">
+        {% for u in equipe %}<option value="{{ u['id'] }}">{{ u['name'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Título (opcional) <input type="text" name="title" maxlength="160"></label>
+    <label>Observações <textarea name="notes" rows="2"></textarea></label>
+    <button type="submit">Calcular e cadastrar</button>
+  </form>
+  <p class="muted">Quer só conferir uma conta sem cadastrar? Use o <a href="/prazos/simular">simulador</a>.</p>
+</section>
+
+<section class="panel">
+  <h2>Prazos {{ filtro }}</h2>
+  <p class="muted">
+    <a href="/prazos?status=abertos">Abertos</a> ·
+    <a href="/prazos?status=concluidos">Concluídos</a> ·
+    <a href="/prazos?status=todos">Todos</a>
+  </p>
+  <div class="table-wrap"><table>
+    <tr><th>Situação</th><th>Vencimento</th><th>Prazo</th><th>Processo</th><th>Fundamento</th><th>Responsável</th><th></th></tr>
+    {% for p in prazos %}
+    <tr>
+      <td><strong>{{ p['texto_prazo'] }}</strong></td>
+      <td>{{ p['due_date'] }}</td>
+      <td>{{ p['title'] }}{% if p['doubled'] %} <em>(em dobro)</em>{% endif %}</td>
+      <td>{{ p['case_number'] or p['case_title'] or '—' }}</td>
+      <td>{{ p['legal_basis'] or '—' }}</td>
+      <td>{{ p['responsavel'] or '—' }}</td>
+      <td>
+        {% if p['status'] != 'Concluído' and p['status'] != 'Cancelado' %}
+        <form method="post" action="/prazos/{{ p['id'] }}/protocolar" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+          <input type="hidden" name="protocol_date" value="{{ hoje }}">
+          <button type="submit">Protocolado</button>
+        </form>
+        <form method="post" action="/prazos/{{ p['id'] }}/cancelar" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+          <button type="submit">Cancelar</button>
+        </form>
+        {% else %}{{ p['status'] }}{% if p['protocol_date'] %} em {{ p['protocol_date'] }}{% endif %}{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">Nenhum prazo nesta situação.</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+
+<p class="alert"><strong>Conferência obrigatória.</strong> O cálculo considera feriados nacionais, de {{ uf }} e o recesso forense.
+Não conhece feriado municipal, ponto facultativo do tribunal nem suspensão por portaria ou decisão no processo.
+Toda data é sugestão: confira no calendário do tribunal antes de confiar.</p>
+{% endblock %}

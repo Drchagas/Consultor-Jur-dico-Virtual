@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.env
+.env.local
+*.db
+*.sqlite3
+data/
+logs/
+runtime/
+.venv/
+venv/
+CREDENCIAIS_INICIAIS.txt
+.DS_Store

@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">Gestão processual + Copiloto</span><h1>Processos e casos</h1><p>Cadastre manualmente ou use o Intake Inteligente para o JARBAS ler o PDF e perguntar somente quem é o cliente.</p></div>
+  <div class="action-row"><a class="button" href="/intake">✦ Importar PDF automaticamente</a><div class="limit-chip">{{ cases|length }} / {{ subscription['case_limit'] }} casos</div></div>
+</div>
+<div class="grid2 wide-left">
+<section class="panel">
+  <div class="panel-head"><div><span class="eyebrow">Novo processo</span><h2>Cadastro completo</h2></div><span class="pill-live">PDF integrado</span></div>
+  <form method="post" enctype="multipart/form-data" class="form-stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+    <div class="form-grid2"><label>Título<input name="title" required placeholder="Ex.: Defesa em ação indenizatória"></label><label>Área<select name="area"><option>Cível</option><option>Criminal</option><option>Trabalhista</option><option>Família</option><option>Empresarial</option><option>Sucessões</option><option>Administrativo</option><option>Previdenciário</option><option>Tributário</option><option>Consumidor</option><option>Eleitoral</option><option>Outro</option></select></label></div>
+    <div class="form-grid2"><label>Cliente<select name="client_id"><option value="">Sem vínculo</option>{% for c in clients %}<option value="{{ c['id'] }}">{{ c['name'] }}</option>{% endfor %}</select></label><label>Nº do processo<input name="number" placeholder="0000000-00.0000.0.00.0000"></label></div>
+    <div class="form-grid2"><label>Órgão/tribunal<input name="court" placeholder="TJRS · 2ª Vara Judicial de ..."></label><label>Risco<select name="risk"><option>Baixo</option><option selected>Médio</option><option>Alto</option><option>Crítico</option></select></label></div>
+    <div class="form-grid2"><label>Classe processual<input name="case_class" placeholder="Ex.: Procedimento Comum Cível"></label><label>Assunto<input name="subject" placeholder="Ex.: Indenização por danos materiais"></label></div>
+    <label>Valor da causa<input type="number" min="0" step="0.01" name="claim_value" value="0"></label>
+    <label class="drop-zone prominent-upload"><strong>Autos do processo — PDF(s)</strong><span>Selecione o PDF integral ou vários documentos. O upload é opcional no cadastro e pode ser complementado depois.</span><input type="file" name="files" accept="application/pdf,.pdf" multiple></label>
+    <div class="safe-note">Após cadastrar, o JARBAS extrai o texto página a página, indexa os autos e libera “Pergunte aos Autos”, Hard Truth e geração de minuta rastreável. PDF sem camada de texto é marcado para OCR.</div>
+    <label>Fatos já conhecidos<textarea name="facts" placeholder="Registre apenas fatos confirmados."></textarea></label><label>Provas já conhecidas<textarea name="evidence"></textarea></label><label>Estratégia preliminar<textarea name="strategy"></textarea></label><label>Próximo passo<textarea name="next_step"></textarea></label>
+    <button>Cadastrar processo e indexar arquivos</button>
+  </form>
+</section>
+<section class="panel"><div class="panel-head"><h2>Casos</h2><span>segregados por workspace</span></div>{% for c in cases %}<a class="list-row link" href="/cases/{{ c['id'] }}"><div><strong>{{ c['title'] }}</strong><small>{{ c['client_name'] or 'Sem cliente vinculado' }}</small></div><div class="right"><span class="badge {{ c['risk']|lower|replace('í','i') }}">{{ c['risk'] }}</span><small>{{ c['number'] or c['area'] }}</small></div></a>{% else %}<p class="empty">Sem casos cadastrados.</p>{% endfor %}</section>
+</div>
+{% endblock %}

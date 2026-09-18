@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">Cadastro único · jurídico + documentos + financeiro</span><h1>Clientes</h1><p>Um único cadastro alimenta processos, procurações, AJG, contratos de honorários, despesas e Central IA.</p></div><a class="button secondary" href="/intake">Importar cliente pelo PDF do processo</a></div>
+<div class="grid2 wide-left">
+<section class="panel">
+  <div class="panel-head"><div><span class="eyebrow">Novo cliente</span><h2>Cadastro completo</h2></div><span class="pill-live">interligado</span></div>
+  <form method="post" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+    <div class="form-grid2"><label>Nome / Razão social<input name="name" required></label><label>Tipo<select name="person_type"><option>Pessoa Física</option><option>Pessoa Jurídica</option></select></label></div>
+    <div class="form-grid2"><label>CPF/CNPJ<input name="document"></label><label>RG / Inscrição<input name="rg"></label></div>
+    <div class="form-grid3"><label>Nacionalidade<input name="nationality" value="Brasileiro(a)"></label><label>Estado civil<input name="marital_status"></label><label>Profissão<input name="profession"></label></div>
+    <div class="form-grid3"><label>Nascimento<input type="date" name="birth_date"></label><label>Telefone / WhatsApp<input name="phone"></label><label>E-mail<input type="email" name="email"></label></div>
+    <div class="form-grid3"><label>Endereço<input name="address"></label><label>Número<input name="address_number"></label><label>Complemento<input name="complement"></label></div>
+    <div class="form-grid4"><label>Bairro<input name="neighborhood"></label><label>Cidade<input name="city"></label><label>UF<input name="state" maxlength="2"></label><label>CEP<input name="zip_code"></label></div>
+    <label>Responsável/representante (se PJ ou incapaz)<input name="responsible_name"></label>
+    <label>Observações<textarea name="notes"></textarea></label>
+    <button>Cadastrar e abrir dossiê</button>
+  </form>
+</section>
+<section class="panel"><div class="panel-head"><h2>Base de clientes</h2><span>{{ clients|length }} cadastros</span></div>
+{% for c in clients %}<a class="list-row link" href="/clients/{{ c['id'] }}"><div><strong>{{ c['name'] }}</strong><small>{{ c['person_type'] or 'Cliente' }} · {{ c['document'] or 'sem CPF/CNPJ' }}</small></div><div class="right"><span>{{ c['phone'] }}</span><small>{{ c['email'] }}</small></div></a>{% else %}<p class="empty">Sem clientes cadastrados.</p>{% endfor %}
+</section></div>
+{% endblock %}

@@ -1,0 +1,12 @@
+JARBAS Jurídico Enterprise 8.3.1 — PDF Critical Hotfix
+
+- corrige falso erro FontBBox/pdfminer no instalador;
+- PyMuPDF é o extrator primário;
+- pypdf e pdfplumber são usados somente como fallback por página;
+- warnings do pdfminer não derrubam o pipeline;
+- reindexação integral forçada dos PDFs existentes;
+- diagnóstico de cobertura real do índice;
+- upload duplicado deixa de ser falso erro;
+- detalhes reais de upload/extração aparecem no Copiloto;
+- mantém leitura direta do PDF original pela OpenAI quando configurada;
+- preserva todos os dados existentes.

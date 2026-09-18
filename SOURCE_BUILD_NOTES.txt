@@ -1,0 +1,8 @@
+JARBAS Jurídico Enterprise 8.3.1 — SOURCE BUILD
+
+Este pacote contém o código-fonte integral disponível da versão 8.3.1.
+Foi aplicado ao código do instalador o hotfix confirmado pelo diagnóstico:
+- Test-Path $selfErr -and (...) -> (Test-Path $selfErr) -and (...)
+- Test-Path $reindexErr -and (...) -> (Test-Path $reindexErr) -and (...)
+
+Nenhum dado real de cliente, banco real, senha ou OpenAI API Key foi incluído.

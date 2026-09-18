@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% block title %}Simulador de prazo — JARBAS{% endblock %}{% block content %}
+<div class="page-head"><div>
+  <span class="eyebrow">Controle processual</span>
+  <h1>Simulador de prazo</h1>
+  <p>Confere uma contagem sem cadastrar nada.</p>
+</div></div>
+
+<section class="panel">
+  <form method="get" action="/prazos/simular">
+    <label>Tipo
+      <select name="tipo">
+        {% for t in catalogo %}<option value="{{ t.codigo }}" {% if t.codigo == tipo %}selected{% endif %}>{{ t.nome }} — {{ t.dias }} {{ 'úteis' if t.uteis else 'corridos' }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Termo inicial <input type="date" name="inicio" value="{{ inicio or hoje }}" required></label>
+    <label><input type="checkbox" name="dobro" value="1" {% if dobro == '1' %}checked{% endif %}> Prazo em dobro</label>
+    <button type="submit">Calcular</button>
+  </form>
+</section>
+
+{% if erro %}<p class="alert">{{ erro }}</p>{% endif %}
+
+{% if resultado %}
+<section class="panel">
+  <h2>Resultado</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Termo inicial</th><td>{{ resultado.termo_inicial.strftime('%d/%m/%Y') }}</td></tr>
+    <tr><th>Início da contagem</th><td>{{ resultado.inicio_contagem.strftime('%d/%m/%Y') }}</td></tr>
+    <tr><th>Prazo</th><td>{{ resultado.dias }} {{ 'dias úteis' if resultado.uteis else 'dias corridos' }}</td></tr>
+    <tr><th>Vencimento</th><td><strong>{{ resultado.vencimento.strftime('%d/%m/%Y') }}</strong></td></tr>
+    <tr><th>Fundamento</th><td>{{ resultado.fundamento or '—' }}</td></tr>
+    <tr><th>Dias no calendário</th><td>{{ (resultado.vencimento - resultado.inicio_contagem).days }}</td></tr>
+  </table></div>
+  {% for n in resultado.suspensoes %}<p class="alert">{{ n }}</p>{% endfor %}
+</section>
+{% endif %}
+
+<p><a href="/prazos">Voltar aos prazos</a></p>
+{% endblock %}

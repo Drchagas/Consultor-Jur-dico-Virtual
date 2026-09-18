@@ -1,0 +1,104 @@
+{% extends "base.html" %}{% block title %}Conselho tri-IA — JARBAS{% endblock %}{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">Inteligência Artificial</span>
+    <h1>Conselho tri-IA</h1>
+    <p>Claude em papéis distintos. Quem redige não critica: a revisão é sempre feita por outro modelo.</p>
+  </div>
+</div>
+
+<section class="panel">
+  <h2>Provedores</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Provedor</th><th>Chave</th><th>SDK</th><th>Situação</th></tr>
+    {% for nome, p in status['provedores'].items() %}
+    <tr>
+      <td><strong>{{ nome }}</strong></td>
+      <td>{{ p['chave'] or '—' }}</td>
+      <td>{{ 'instalado' if p['sdk'] else 'ausente' }}</td>
+      <td>{% if p['configurado'] and p['sdk'] %}pronto{% elif not p['configurado'] %}sem chave{% else %}SDK faltando{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+
+  <p class="alert"><strong>Sobre a revisão:</strong> {{ status['nota_independencia'] }}
+  Até a versão 8.9 a crítica vinha de outro fornecedor, o que dava independência real.
+  Com provedor único ela continua existindo, mas entre modelos de mesma linhagem.</p>
+</section>
+
+<section class="panel">
+  <h2>Divisão de papéis</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Papel</th><th>Provedor</th><th>Modelo</th><th>Pronto</th></tr>
+    {% for papel, c in status['papeis'].items() %}
+    <tr>
+      <td>{{ papel }}</td>
+      <td>{{ c['provedor'] or '—' }}</td>
+      <td>{{ c['modelo'] or c['erro'] }}</td>
+      <td>{{ 'sim' if c['pronto'] else 'não' }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <p class="muted">Sobrescreva qualquer papel no <code>.env.local</code> com
+  <code>JARBAS_PAPEL_&lt;PAPEL&gt;=provedor:modelo</code>. Ranking de modelo muda a cada poucos meses —
+  meça com os seus próprios autos antes de fixar.</p>
+</section>
+
+<section class="panel">
+  <h2>Consumo do mês</h2>
+  <p>
+    Gasto real medido por token: <strong>US$ {{ '%.4f'|format(gasto_usd) }}</strong>
+    {% if teto_usd %} de um teto de <strong>US$ {{ '%.2f'|format(teto_usd) }}</strong>
+    (restam US$ {{ '%.4f'|format(restante_usd) }}){% else %}
+    — <strong>sem teto configurado</strong>{% endif %}.
+  </p>
+  {% if not teto_usd %}
+  <p class="alert">Teto desligado. Defina <code>JARBAS_AI_TETO_USD_MES</code> antes de operar com clientes reais.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Deliberar sobre um caso</h2>
+  {% if casos %}
+  <form method="post" action="/cases/{{ casos[0]['id'] }}/conselho/deliberar" id="formConselho">
+    <input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+    <label>Caso
+      <select name="_caso" onchange="document.getElementById('formConselho').action='/cases/'+this.value+'/conselho/deliberar'">
+        {% for c in casos %}<option value="{{ c['id'] }}">#{{ c['id'] }} — {{ c['title'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Peça pretendida
+      <input type="text" name="pedido" required maxlength="300"
+             placeholder="ex.: contestação em ação de cobrança, com preliminar de prescrição">
+    </label>
+    <label><input type="checkbox" name="usar_pdfs" value="1" checked> Enviar os PDFs do caso (até 10 mais recentes)</label>
+    <label><input type="checkbox" name="pular_critica" value="1"> Pular crítica adversarial (mais barato, menos seguro)</label>
+    <button type="submit">Iniciar deliberação</button>
+  </form>
+  <p class="muted">O fluxo roda cinco etapas em sequência e pode levar alguns minutos em processos volumosos.</p>
+  {% else %}
+  <p>Cadastre um caso antes de usar o conselho.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Histórico de etapas</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Data</th><th>Caso</th><th>Papel</th><th>Provedor</th><th>Modelo</th><th>Tokens</th><th>US$</th><th>s</th></tr>
+    {% for h in historico %}
+    <tr>
+      <td>{{ h['created_at'] }}</td>
+      <td>{{ h['case_id'] or '—' }}</td>
+      <td>{{ h['role'] }}</td>
+      <td>{{ h['provider'] }}{% if h['fallback_from'] %} <em>(fallback de {{ h['fallback_from'] }})</em>{% endif %}</td>
+      <td>{{ h['model'] }}</td>
+      <td>{{ h['input_tokens'] + h['output_tokens'] }}</td>
+      <td>{{ '%.4f'|format(h['cost_usd']) }}</td>
+      <td>{{ '%.1f'|format(h['elapsed_s']) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8">Nenhuma deliberação ainda.</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+{% endblock %}

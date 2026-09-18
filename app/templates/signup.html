@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Criar workspace · JARBAS{% endblock %}
+{% block public_content %}
+<div class="signup-wrap">
+  <div class="signup-head"><div class="brand-large">JARBAS <span>JURÍDICO</span></div><h1>Seu escritório inteiro em um único workspace</h1><p>14 dias de teste. Planos de lançamento com 50% de desconto sobre os valores-base.</p></div>
+  {% if error %}<div class="alert danger">{{ error }}</div>{% endif %}
+  <div class="signup-grid"><section class="panel"><form method="post" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><label>Nome do escritório<input name="office_name" required placeholder="Ex.: Silva & Associados"></label><label>CPF/CNPJ do contratante<input name="document"></label><label>Nome do responsável<input name="owner_name" required></label><label>E-mail<input type="email" name="email" required></label><label>Telefone<input name="phone"></label><label>Senha inicial<input type="password" name="password" minlength="10" required></label><label>Plano promocional<select name="plan_code">{% for p in plans %}<option value="{{ p['code'] }}">{{ p['name'] }} — R$ {{ "%.2f"|format(p['monthly_price']) }}/mês (-50%)</option>{% endfor %}</select></label><button>Criar workspace de teste</button></form><a class="text-link" href="/login">← Voltar ao login</a></section>
+  <section class="panel feature-panel"><h2>O workspace nasce integrado</h2><div class="feature-list"><div><b>01</b><span>CRM, clientes e Intake Inteligente por PDF</span></div><div><b>02</b><span>processos, autos, Copiloto e Central IA</span></div><div><b>03</b><span>procurações/AJG automáticas e GED</span></div><div><b>04</b><span>honorários, parcelas, despesas, plano de contas e caixa</span></div><div><b>05</b><span>equipe, agenda, timesheet, auditoria e relatórios</span></div></div></section></div>
+</div>
+{% endblock %}

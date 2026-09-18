@@ -1,0 +1,2 @@
+# Somente para desenvolvimento e testes. O instalador nao usa este arquivo.
+pytest>=8.0

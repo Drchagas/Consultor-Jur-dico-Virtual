@@ -1,0 +1,9 @@
+JARBAS JURÍDICO ENTERPRISE 8.3.1 — PDF ENGINE
+
+1. EXTRAIA TODO O ZIP.
+2. Execute VERIFICAR_PACOTE.cmd.
+3. Execute INSTALAR_AGORA.cmd.
+4. NÃO apague manualmente bancos ou pastas de versões anteriores: o instalador faz backup e migração.
+5. Para PDFs escaneados, configure a OpenAI. Se Tesseract já estiver instalado, o JARBAS também tentará OCR local automaticamente.
+6. Após instalar, em um processo use Copiloto > Reprocessar todos os PDFs para forçar nova leitura.
+7. Se algum PDF não for lido, execute DIAGNOSTICO_JARBAS.cmd e verifique a seção PDF ENGINE.

@@ -1,0 +1,9 @@
+# Claude (Anthropic) — provedor unico de IA do JARBAS a partir da 9.0.
+#
+# Instalado em etapa TOLERANTE A FALHA: se o pip nao resolver, o JARBAS
+# instala e funciona normalmente, apenas sem as funcoes de IA. Um escritorio
+# nao pode ficar sem sistema de processos porque um SDK nao resolveu.
+#
+# anthropic 1.0.0 (20/08/2026) exige Python >=3.10 e migrou de httpx para
+# httpx2. Faixas <1 instalam uma 0.x obsoleta.
+anthropic>=1.0,<2

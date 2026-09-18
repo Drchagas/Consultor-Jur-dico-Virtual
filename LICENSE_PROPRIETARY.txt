@@ -1,0 +1,6 @@
+JARBAS Jurídico — Código de projeto reservado
+
+Este pacote é fornecido como projeto privado para desenvolvimento do JARBAS Jurídico.
+Não há, neste arquivo, concessão de licença pública, open-source ou autorização automática para redistribuição comercial do código-fonte.
+
+Antes da exploração comercial, recomenda-se formalizar a titularidade dos direitos patrimoniais do software, contratos com desenvolvedores/fornecedores e a licença de uso concedida aos assinantes.

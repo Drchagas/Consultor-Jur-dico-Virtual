@@ -1,0 +1,80 @@
+{% extends "base.html" %}{% block title %}Deliberação — JARBAS{% endblock %}{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">Conselho tri-IA</span>
+    <h1>{{ case['title'] if case else 'Deliberação' }}</h1>
+  </div>
+</div>
+
+{% if erro %}
+<section class="panel">
+  <h2>{% if bloqueio_orcamento %}Teto de gasto atingido{% else %}A deliberação falhou{% endif %}</h2>
+  <p class="alert">{{ erro }}</p>
+  <p><strong>Nenhum texto foi gerado.</strong> O JARBAS não entrega mensagem de erro disfarçada de análise:
+  se uma etapa falha, o fluxo para e você vê a causa. Etapas concluídas antes da falha já foram registradas
+  no consumo, porque foram efetivamente pagas ao provedor.</p>
+  <p><a href="/conselho">Voltar ao conselho</a>{% if case %} · <a href="/cases/{{ case['id'] }}">Abrir o caso</a>{% endif %}</p>
+</section>
+
+{% else %}
+
+{% for a in r.avisos %}<p class="alert">{{ a }}</p>{% endfor %}
+
+<section class="panel">
+  <h2>Resumo da deliberação</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Etapa</th><th>Provedor</th><th>Modelo</th><th>Tokens</th><th>US$</th><th>Tempo</th></tr>
+    {% for e in r.etapas %}
+    <tr>
+      <td>{{ e.role }}</td>
+      <td>{{ e.provider }}{% if e.fallback_from %} <em>(fallback de {{ e.fallback_from }})</em>{% endif %}</td>
+      <td>{{ e.model }}</td>
+      <td>{{ e.total_tokens }}</td>
+      <td>{{ '%.4f'|format(e.cost_usd) }}</td>
+      <td>{{ '%.1f'|format(e.elapsed_s) }}s</td>
+    </tr>
+    {% endfor %}
+    <tr><td colspan="3"><strong>Total</strong></td>
+        <td><strong>{{ r.tokens_totais }}</strong></td>
+        <td><strong>{{ '%.4f'|format(r.custo_total_usd) }}</strong></td><td></td></tr>
+  </table></div>
+  {% if r.critica %}
+  <p class="muted">Redigido por <strong>{{ r.redacao.model }}</strong> e criticado por
+  <strong>{{ r.critica.model }}</strong> — modelos distintos, como exige o desenho.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Versão final</h2>
+  <p class="alert"><strong>Minuta de trabalho.</strong> Não protocole sem leitura integral, conferência de todo
+  fundamento marcado <code>[CONFERIR FUNDAMENTO]</code> e revisão do advogado responsável. A responsabilidade
+  técnica permanece integralmente do profissional inscrito na OAB.</p>
+  <pre class="doc">{{ r.texto_final }}</pre>
+  {% if draft_id and case %}
+  <p><a href="/cases/{{ case['id'] }}/drafts/{{ draft_id }}">Abrir como minuta salva</a></p>
+  {% endif %}
+</section>
+
+{% if r.critica %}
+<section class="panel">
+  <h2>Crítica adversarial ({{ r.critica.provider }})</h2>
+  <p class="muted">Leia esta seção antes da peça. É aqui que aparecem afirmações sem lastro nos autos
+  e citações que precisam de conferência humana.</p>
+  <pre class="doc">{{ r.critica.text }}</pre>
+</section>
+{% endif %}
+
+<details><summary>Estratégia ({{ r.estrategia.provider }})</summary>
+  <pre class="doc">{{ r.estrategia.text }}</pre></details>
+
+<details><summary>Extração dos autos ({{ r.extracao.provider }})</summary>
+  <pre class="doc">{{ r.extracao.text }}</pre></details>
+
+{% if r.redacao and r.revisao %}
+<details><summary>Primeira minuta, antes da crítica ({{ r.redacao.provider }})</summary>
+  <pre class="doc">{{ r.redacao.text }}</pre></details>
+{% endif %}
+
+<p><a href="/conselho">Nova deliberação</a>{% if case %} · <a href="/cases/{{ case['id'] }}">Voltar ao caso</a>{% endif %}</p>
+{% endif %}
+{% endblock %}

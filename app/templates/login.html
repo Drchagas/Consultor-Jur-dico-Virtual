@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}Acesso · JARBAS Jurídico{% endblock %}
+{% block public_content %}
+<div class="auth-grid">
+  <section class="auth-hero">
+    <div class="brand-large">JARBAS <span>JURÍDICO</span></div>
+    <h1>Inteligência jurídica e gestão em uma única plataforma.</h1>
+    <p>Ambientes independentes para advogados e escritórios, com processos, clientes, equipe, financeiro, auditoria e inteligência jurídica assistida.</p>
+    <div class="trust-row"><span>Multi-Tenant</span><span>LGPD-ready</span><span>Hard Truth</span><span>Auditoria</span></div>
+  </section>
+  <section class="auth-card">
+    <div class="product-lockup"><div class="jarbas-mark">J</div><div><strong>JARBAS Jurídico</strong><small>Plataforma SaaS para advocacia</small></div></div>
+    <span class="eyebrow">Acesso seguro</span>
+    <h2>Entrar no workspace</h2>
+    <p class="muted">Use as credenciais do seu escritório.</p>
+    {% if error %}<div class="alert danger">{{ error }}</div>{% endif %}
+    <form method="post" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+      <label>E-mail<input type="email" name="email" required autocomplete="username"></label>
+      <label>Senha<input type="password" name="password" required autocomplete="current-password"></label>
+      <button>Entrar</button>
+    </form>
+    <a class="button ghost full" href="/signup">Criar workspace de teste</a><a class="text-link product-link" href="/produto">Conhecer o produto →</a>
+  </section>
+</div>
+{% endblock %}

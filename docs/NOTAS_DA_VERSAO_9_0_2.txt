@@ -1,0 +1,521 @@
+JARBAS Juridico Enterprise 8.5.0 — Conselho tri-IA
+===================================================
+
+NOVO
+- Conselho tri-IA: OpenAI + Anthropic + Google em papeis distintos.
+- Regra "quem redige nao critica": revisao adversarial sempre por outro
+  fornecedor. Com um provedor so, a critica e PULADA e sinalizada, nunca
+  feita pelo proprio autor.
+- Fluxo de 5 etapas: extracao -> estrategia -> redacao -> critica -> revisao.
+- Tela /conselho com status dos provedores, papeis, consumo e historico.
+- Fallback automatico entre provedores, com registro de origem.
+
+CUSTO
+- Medicao por token REAL, nao por credito de valor fixo.
+- Teto mensal em dolar (JARBAS_AI_TETO_USD_MES, padrao 50). Bloqueia ANTES
+  de chamar a API. Registro por etapa na tabela ai_council_runs.
+
+CORRECOES
+- 'testserver' removido do JARBAS_ALLOWED_HOSTS de producao.
+- Erro de provedor nunca mais vira conteudo de peca (bug da 8.4.2).
+
+TESTES — 47, era 0
+- tests/test_isolamento.py (11): isolamento entre escritorios, cascata de
+  exclusao de chunks, guarda do tradutor SQL do PostgreSQL.
+- tests/test_ai_council.py (21): roteamento, fallback, independencia da
+  critica, teto de gasto, calculo de custo.
+- tests/test_integracao.py (15): fiacao do router, migracao de schema,
+  templates, dependencias.
+- Rode com:  pytest -q
+- Sem pytest instalado:  python tools/minipytest.py
+
+MIGRACAO A PARTIR DA 8.3.1
+- Automatica. initialize_schema() aplica V85_EXTRA no boot.
+- Nenhuma tabela existente e alterada; ai_council_runs e criada nova.
+- Chaves OpenAI ja configuradas sao preservadas.
+
+ATENCAO
+- NAO sobrescreva app/database.py com o arquivo de mesmo nome do pacote
+  "JARBAS_Instalador_Completo_8_4_2_FINAL.zip". Aquele arquivo tem 432 bytes
+  e destroi toda a camada de banco (schema, migracoes, abstracao Postgres).
+- google-generativeai foi DESCONTINUADO pelo Google. Use google-genai.
+- Gemini 1.5 foi desligado: requisicoes retornam 404.
+
+-----------------------------------------------------------------------
+8.5.1 — CORRECAO DE FALHA EM PRODUCAO
+-----------------------------------------------------------------------
+
+BUG CORRIGIDO: UndefinedError 'ocr_status'
+- Sintoma: HTTP 500 ao usar "Perguntar aos autos", "Analisar" e
+  "Hard Truth". A chamada a OpenAI era feita e PAGA, e so entao a pagina
+  quebrava na renderizacao. O resultado era perdido.
+- Causa: copilot.html usa ocr_status em duas linhas, mas das QUATRO rotas
+  que renderizam esse template apenas a GET passava a variavel.
+- Correcao: as tres rotas POST agora passam ocr_status=ocr_capability().
+
+NOVA FERRAMENTA: tools/check_templates.py
+- Varre todas as chamadas a safe_template_response e compara o contexto
+  passado com as variaveis que o template realmente exige, seguindo
+  heranca de template.
+- Distingue o que quebra do que e inofensivo:
+    {{ x }}          -> vazio          ok
+    {% if x %}       -> False          ok
+    {{ x.attr }}     -> UndefinedError CRITICO
+    {% for i in x %} -> UndefinedError CRITICO
+  Uso dentro do CORPO de um {% if %} e considerado protegido; uso no
+  TESTE do if quebra sempre.
+- Rode antes de cada release:  python tools/check_templates.py
+
+SCRIPTS AUXILIARES
+- DIAGNOSTICO_JARBAS.ps1 e CONFIGURAR_OPENAI.ps1 ainda apontavam para
+  instalacao-8.3.1.log. Por isso o diagnostico de uma instalacao 8.5.0
+  exibia o log de uma tentativa antiga e falhada, dando a impressao de
+  que a instalacao nao tinha funcionado.
+
+TESTES: 66 (eram 59)
+
+-----------------------------------------------------------------------
+8.5.2 — SELF-TEST DO INSTALADOR E DEPENDENCIAS
+-----------------------------------------------------------------------
+
+BUG CORRIGIDO: "Self-test integrado falhou"
+- Causa: na 8.5.0 eu removi 'testserver' do JARBAS_ALLOWED_HOSTS de
+  producao (certo em si), sem notar que o TestClient do Starlette usa
+  exatamente esse host por padrao. O TrustedHostMiddleware devolvia 400
+  e o instalador abortava.
+- Correcao: o self-test agora usa base_url=http://localhost, host que ja
+  consta da lista. 'testserver' continua FORA da producao.
+
+BUG CORRIGIDO: versao hardcoded em 4 lugares
+- /health devolvia a string "8.3.1" literal. Mudar FastAPI(version=...)
+  nao tinha efeito nenhum sobre ele, e o self-test comparava com esse
+  valor. Subir para 8.5.1 quebraria a instalacao.
+- Agora VERSION.txt e fonte unica: APP_VERSION alimenta o FastAPI,
+  /health e o schema_version do banco. O self-test compara com o arquivo.
+
+DEPENDENCIAS DE IA AGORA SAO OPCIONAIS
+- anthropic e google-genai sairam do requirements.txt para
+  requirements-ia.txt, instalado em etapa TOLERANTE A FALHA.
+- Motivo: um escritorio nao pode ficar sem sistema de processos porque
+  um SDK de IA nao resolveu no pip.
+- Faixas corrigidas apos verificacao no PyPI:
+    anthropic  >=1.0,<2   (1.0.0 saiu em 20/08/2026; <1 pegava 0.x velha)
+    google-genai >=2.0,<3 (linha atual e 2.22.0, de 02/09/2026)
+- httpx deixou de ser pino exato (==0.28.1): conflitava com google-genai
+  2.x e derrubava a resolucao do pip inteira.
+
+OUTROS
+- /conselho entrou na varredura de rotas do self-test.
+- pytest saiu para requirements-dev.txt; o instalador nao precisa dele.
+
+TESTES: 84 (eram 66)
+
+-----------------------------------------------------------------------
+8.6.0 — PLANO COMO CONTRATO APLICAVEL
+-----------------------------------------------------------------------
+
+NOVO: app/plan_limits.py
+- Cota de armazenamento APLICADA no upload. Antes, plans.storage_gb existia
+  no banco e nunca era conferido: assinante de 20 GB podia subir 500 GB.
+- Faixa de modelos por plano (plans.ai_tier): basico / economico / padrao /
+  premium. Precedencia sobre variavel de ambiente.
+- Orcamento de IA por escritorio (plans.monthly_ai_usd), cobrado por token
+  real e bloqueado ANTES da chamada a API.
+- Escritorio sem assinatura ativa cai em 1 GB e faixa basico.
+
+CUSTO POR ANALISE COMPLETA (processo de 328 paginas, medido):
+  premium    US$ 2,28   economico  US$ 0,75
+  padrao     US$ 0,98   basico     US$ 0,32
+
+Em 2.000 assinantes x 10 analises/mes, a faixa premium consome
+US$ 45.680/mes — praticamente toda a receita do mix projetado. Por isso a
+faixa virou atributo do plano, e nao do codigo.
+
+Ver docs/CAPACIDADE_2000_ASSINANTES.md para o dimensionamento completo.
+
+TESTES: 100 (eram 84)
+
+-----------------------------------------------------------------------
+8.7.0 — COBRANCA RECORRENTE (MERCADO PAGO)
+-----------------------------------------------------------------------
+
+NOVO: app/billing_mercadopago.py + app/billing_routes.py
+- Modelo Preapproval + Checkout Pro: o assinante autoriza UMA vez numa
+  pagina do proprio Mercado Pago e as cobrancas seguintes sao automaticas.
+  O JARBAS nunca ve numero de cartao (fora do escopo PCI-DSS).
+- POST /billing/assinar/{plano}  autenticado, com CSRF e permissao
+- GET  /billing/retorno          volta do checkout — NAO ativa nada
+- POST /webhooks/mercadopago     publico, autenticado por HMAC
+
+SEGURANCA DO WEBHOOK
+- Assinatura x-signature validada ANTES de qualquer escrita no banco.
+  Manifesto: "id:{data.id};request-id:{x-request-id};ts:{ts};"
+  HMAC-SHA256 hex, comparado com compare_digest.
+- Janela de 600s contra replay de notificacao capturada.
+- O status NUNCA vem do corpo do webhook: o corpo diz apenas QUAL recurso
+  mudou. O status vem de consulta autenticada a /preapproval/{id}. Confiar
+  no corpo deixaria forjar "authorized" e obter acesso de graca.
+- /billing/retorno nao ativa assinatura: a URL e digitavel pelo usuario.
+- Idempotencia por indice unico em billing_events(provider,event_key):
+  o Mercado Pago reenvia notificacoes.
+
+ESTADOS
+  pending    -> pending    sem acesso
+  authorized -> active     ACESSO
+  paused     -> past_due   sem acesso (cobranca falhou)
+  cancelled  -> canceled   sem acesso
+  desconhecido -> pending  sem acesso (padrao seguro)
+
+Assinatura fora de 'active' cai nos limites minimos (1 GB, faixa basico).
+
+CREDENCIAIS
+- Nada no codigo. Tudo em .env.local. Ha teste que falha se aparecer
+  qualquer string TEST-... ou APP_USR-... em app/*.py.
+- MERCADOPAGO_WEBHOOK_SECRET e um valor DISTINTO do access token.
+
+TESTES: 136 (eram 100)
+
+-----------------------------------------------------------------------
+8.8.0 — PENDENCIAS DA LISTA DE VIABILIDADE
+-----------------------------------------------------------------------
+
+BUSCA INDEXADA (app/search_index.py)
+- FTS5 no SQLite, to_tsvector/ts_rank no PostgreSQL. O ranking sai do
+  banco, que le so as linhas que casam.
+- Antes: search_case carregava TODOS os chunks do caso na memoria do
+  Python a cada consulta. Medido agora: 2.000 chunks respondem em <1,5ms.
+- Radicalizacao: "probatoria" casa "probatorio", "nulidades" casa
+  "nulidade" — o metodo antigo nao fazia isso.
+- Termos do usuario sao aspeados: sem isso, um "AND" ou parentese digitado
+  vira sintaxe do FTS5 e derruba a consulta com erro.
+- Reserva automatica: SQLite sem FTS5 cai na varredura antiga.
+
+2FA E RECUPERACAO DE SENHA (app/auth_2fa.py)
+- TOTP RFC 6238 so com biblioteca padrao. Validado contra os 6 vetores
+  oficiais do Apendice B da RFC — compativel com Google Authenticator,
+  Authy, 1Password e Microsoft Authenticator.
+- Janela de +/-30s para deriva de relogio, e nada alem disso.
+- Codigos de recuperacao guardados como hash, nunca em claro.
+- Token de redefinicao: so o hash vai ao banco. Vazamento da tabela nao
+  permite redefinir a senha de ninguem. Validade de 1 hora.
+- Antes disto NAO HAVIA recuperacao de senha alguma: quem esquecesse a
+  senha do admin perdia o acesso ao sistema.
+
+RETENCAO E ELIMINACAO (app/retencao.py)
+- Exclusao passa a ser reversivel: marca deleted_at, some da interface,
+  e os chunks somem do Copiloto na hora.
+- Expurgo definitivo apos carencia (padrao 30 dias), removendo arquivo,
+  chunks e paginas. Valida que o caminho esta dentro da raiz de uploads
+  antes de apagar.
+- eliminar_a_pedido_do_titular() para o art. 18, VI da LGPD: nao espera
+  carencia. Nao apaga lancamentos financeiros (art. 16, I).
+- Antes: nada era jamais eliminado. Reter dado de terceiros sem prazo nem
+  finalidade nao e conservadorismo, e descumprimento.
+
+BANCO
+- Pool de conexoes no PostgreSQL (psycopg_pool). Antes, cada request abria
+  conexao nova. Reserva para conexao direta se a lib faltar.
+- Row Level Security em 9 tabelas com tenant, com FORCE (vale tambem para
+  o dono da tabela) e WITH CHECK (impede INSERT em outro tenant).
+  jarbas.org_id definido por SET LOCAL, que morre com a transacao.
+- TOCTOU do debito de creditos corrigido: leitura e insercao na MESMA
+  transacao, com BEGIN IMMEDIATE. Antes, duas abas simultaneas passavam
+  as duas pela checagem de teto.
+
+NOVO: tools/manutencao.py
+  python tools/manutencao.py --expurgo --reindexar [--rls] [--org N]
+
+NAO ENTREGUE NESTA VERSAO
+- Fila com workers assincronos. Uma analise de 328 paginas ainda roda
+  dentro do request HTTP. Isso e reescrita arquitetural (Redis + workers +
+  resultado assincrono + tela de progresso), nao um ajuste. Continua sendo
+  pre-requisito de lancamento SaaS, e esta pendente por escolha explicita:
+  entregar mal seria pior que nao entregar.
+
+TESTES: 176 (eram 136)
+
+-----------------------------------------------------------------------
+8.8.1 — CORRECAO DE DUAS FALHAS DE PRODUCAO
+-----------------------------------------------------------------------
+
+BUG 1: JARBAS_BOOTSTRAP_INIT_ERROR — instalacao nao concluia
+- ensure_column(conn, tabela, "coluna TIPO") tem TRES parametros: nome e
+  tipo vao na MESMA string. Eu chamei com QUATRO em 14 lugares.
+- Efeito: TypeError -> initialize_schema aborta -> init_db falha inteiro.
+  O schema ficava travado na versao anterior e o bootstrap-admin saia vazio.
+- Atingiu as versoes 8.6.0, 8.7.0 e 8.8.0. Nenhuma delas instalava.
+- Por que passou batido: os testes verificavam se a STRING
+  'ensure_column(conn, "plans", "ai_tier"' existia no arquivo. Nunca
+  CHAMAVAM a funcao. Teste que so casa texto da confianca falsa.
+- Agora ha teste que EXECUTA initialize_schema em dois caminhos: banco novo
+  e banco preexistente em 8.5.2.
+
+BUG 2: HTTP 500 em /intake, /billing e /audit com sessao expirada
+   'NoneType' object is not subscriptable         (ao usar org["id"])
+   'RedirectResponse' object is not subscriptable (ao usar user["..."])
+- Causa: require_workspace devolvia (redirect, None). As rotas checam
+  isinstance(org, RedirectResponse) — e None NAO e RedirectResponse, entao
+  a checagem passava batido e a linha seguinte estourava.
+- Correcao na FONTE: o redirect vai nos dois lugares. Uma linha conserta as
+  78 rotas de uma vez, sem depender de cada rota lembrar de checagem extra.
+- v7.py usa _org_user(), que so repassa require_workspace: herda a correcao.
+- Auditoria automatizada das 78 rotas (53 main, 21 v7, 2 conselho,
+  2 cobranca): todas guardam o sentinela antes de usar user/org.
+
+TESTES: 186 (eram 176)
+
+-----------------------------------------------------------------------
+8.8.2 — PDF DE DOWNLOAD DE TRIBUNAL
+-----------------------------------------------------------------------
+
+PROBLEMA: PDF legitimo do eproc recusado no upload
+- O download do eproc/TJRS entrega nomes com a extensao NO MEIO:
+    ..._downloa__1_.PDF_numIdSessao_0117...&hash=08c6d57a05f5...
+  232 caracteres, sem .pdf no fim.
+- O upload testava original.lower().endswith(".pdf") e recusava com
+  "apenas PDF e aceito" ANTES de ler um byte. O arquivo era PDF valido:
+  43 paginas, cabecalho %PDF-1.7.
+- Agora a identificacao e por CONTEUDO. O pre-filtro por nome so barra o
+  que e claramente outro tipo (.exe, .zip, .mkv...), para nao gravar lixo
+  grande em disco; quem da a palavra final e o cabecalho %PDF-, que o
+  store_uploaded_pdf ja conferia.
+
+NOVO: nome util a partir do numero do processo (app/nome_documento.py)
+- Salvo com o nome do download, o documento aparecia na interface e nas
+  citacoes do Copiloto como 200+ caracteres de URL.
+- Apos a indexacao, o numero CNJ e extraido do texto das 3 primeiras
+  paginas e o documento vira "Processo 5005877-37.2026.8.21.0041.pdf".
+- O numero e validado pelo digito verificador da Resolucao CNJ 65/2008.
+  Sem isso, um numero de apenso ou precedente citado no corpo dos autos
+  viraria o nome do arquivo. Formula conferida contra 5 processos reais.
+- Ordem de preferencia: numero no PDF > numero do caso cadastrado >
+  nome original limpo > "Documento.pdf".
+- A limpeza agressiva SO roda em nome comprovadamente de URL. Aplicada a
+  tudo, destruiria nomes legitimos: "Acao Revisional" perdia "Acao".
+- Renomear nao move o arquivo: stored_path fica igual, links nao quebram.
+
+RETROATIVO: documentos ja cadastrados
+    python tools/manutencao.py --renomear
+  Troca os nomes de download pelos numeros de processo. Documentos com
+  nome dado por pessoa nao sao tocados.
+
+TESTES: 216 (eram 186)
+
+-----------------------------------------------------------------------
+8.8.3 — DIAGNOSTICO DE PDF
+-----------------------------------------------------------------------
+
+NOVO: tools/diagnosticar_pdf.py
+
+    python tools/diagnosticar_pdf.py "C:\caminho\arquivo.PDF"
+    python tools/diagnosticar_pdf.py "C:\Downloads\*eproc*"
+
+Roda as MESMAS checagens do upload, na mesma ordem, e diz em qual delas o
+arquivo parou:
+
+  [1/4] aceitacao pelo nome       (parece_pdf)
+  [2/4] cabecalho %PDF-           (a prova que vale)
+  [3/4] limite de tamanho         (JARBAS_MAX_UPLOAD_MB)
+  [4/4] extracao de texto         (paginas, cobertura, motores usados)
+
+A mensagem que o usuario via — "apenas PDF e aceito" — nao distinguia entre
+esses quatro casos. Agora distingue, inclusive avisando quando a propria
+instalacao esta desatualizada demais para aceitar o arquivo.
+
+VERIFICACAO CONTRA O ARQUIVO REAL DO ESCRITORIO
+- PDF de 43 paginas baixado do eproc/TJRS, processo 5005877-37.2026.8.21.0041.
+- Pipeline le 43/43 paginas, 43.801 caracteres, cobertura 100% — mesmo SEM
+  PyMuPDF instalado (cai em pdfplumber:40 + pypdf:3).
+- Confirmado tambem com lixo (CRLF, BOM UTF-8) antes do cabecalho %PDF-.
+- Conclusao: o PDF nunca foi o problema. O bloqueio era a rejeicao pelo
+  nome, corrigida na 8.8.2.
+
+TESTES: 221 (eram 216)
+
+-----------------------------------------------------------------------
+8.9.0 — PRAZOS, LINHA DO TEMPO E DOCUMENTOS
+-----------------------------------------------------------------------
+
+1. PRAZOS PROCESSUAIS (app/prazos.py + /prazos)
+- Antes: duas rotas soltas, nenhuma tela, 8 colunas. O prazo era um titulo
+  e uma data digitada a mao. ZERO calculo em dias uteis no sistema inteiro.
+- Agora: contagem conforme o art. 219 do CPC, com
+    * art. 224 — exclui o dia do comeco, adia inicio em dia sem expediente
+    * art. 220 — recesso forense de 20/12 a 20/01
+    * feriados nacionais, moveis (Pascoa conferida contra 2023-2028) e do RS
+    * prazo em dobro (arts. 183, 186, 229)
+    * prazo material em dias corridos, com prorrogacao do art. 224, §1º
+- Catalogo com 22 tipos, cada um com fundamento legal registrado.
+- Painel /prazos com semaforo por dias UTEIS restantes, e /prazos/simular
+  para conferir uma conta sem cadastrar.
+- deadlines passou de 8 para 21 colunas: termo inicial, inicio da contagem,
+  dias, fundamento, responsavel, alerta, data de protocolo.
+
+  Exemplo do que se errava de cabeca: apelacao intimada em 15/12/2025
+  vence em 04/02/2026 — 15 dias uteis viram 51 dias de calendario.
+
+2. LINHA DO TEMPO DOS AUTOS (app/movimentacoes.py)
+- O PDF do eproc traz "Listagem dos Eventos do Processo" nas primeiras
+  paginas. O intake extraia 30 campos e ignorava justamente essa tabela.
+- Agora ela e importada no upload. No PDF de teste do escritorio: 22
+  movimentacoes, 8 intimacoes detectadas.
+- A deteccao de intimacao e deliberadamente conservadora: marcar demais
+  gera prazo fantasma, e prazo fantasma treina o advogado a ignorar alerta.
+
+3. DATAJUD (CNJ)
+- API publica gratuita, capa e movimentacoes de todos os tribunais.
+- Alias do tribunal deduzido do proprio numero CNJ (TJRS, TRF4, TRT4...).
+- Chave em DATAJUD_API_KEY, divulgada pelo CNJ. Nada embutido no codigo.
+- LIMITE: o DataJud traz METADADOS, nao o inteiro teor. O PDF continua
+  necessario para o Copiloto ler as pecas.
+
+4. DOCUMENTOS (2 -> 6 modelos)
+- Novos: contrato de honorarios, substabelecimento, recibo de honorarios,
+  declaracao de hipossuficiencia.
+- O contrato ja existia como registro em fee_contracts (valor, entrada,
+  parcelas, exito) mas NUNCA gerava o documento.
+- O contrato traz ressalva de sucumbencia (art. 23 da Lei 8.906/94), duas
+  testemunhas (art. 784, III do CPC = titulo executivo) e clausula de
+  tratamento de dados com uso de IA e transferencia internacional.
+
+5. OCR
+- Nao e codigo: e instalacao na maquina. O diagnosticar_pdf.py agora avisa
+  quando o Tesseract falta e aponta onde instalar.
+
+AVISO QUE ACOMPANHA TODA TELA DE PRAZO
+O calculo NAO conhece feriado municipal, ponto facultativo de tribunal nem
+suspensao por portaria ou decisao no processo. Toda data e sugestao sujeita
+a conferencia. A responsabilidade pelo prazo e do advogado.
+
+TESTES: 261 (eram 221)
+
+-----------------------------------------------------------------------
+9.0.0 — CLAUDE COMO PROVEDOR UNICO
+-----------------------------------------------------------------------
+
+OpenAI e Google removidos. Claude passa a ser a unica IA do JARBAS.
+
+GATEWAY REESCRITO (app/ai_gateway.py)
+- Interior trocado para Anthropic; INTERFACE PUBLICA preservada integralmente
+  (ask, ask_with_pdf_files, connection_status, save_local_config, OFFICE_RULES,
+  AIResult, AIConnectionStatus...). main.py, v7.py e copilot.py nao mudaram.
+- OFFICE_RULES copiado LITERAL do arquivo antigo, nao reescrito de memoria:
+  sao as travas anti-alucinacao do escritorio.
+- reasoning_effort continua na assinatura (era da API da OpenAI) e e ignorado,
+  para nao quebrar chamadores.
+
+MODELOS POR PERFIL
+  juridico  claude-opus-5
+  intake    claude-sonnet-5
+  rotina    claude-haiku-4-5-20251001
+
+O QUE SE PERDEU — E ESTA REGISTRADO NO CODIGO E NA TELA
+- A regra "quem redige nao critica" migrou de FORNECEDOR para MODELO.
+- Ate a 8.9 a critica vinha de outra empresa: outros dados de treino, outros
+  pontos cegos. Isso era a defesa mais barata contra citacao inventada.
+- Agora a critica vem de outro modelo Claude. Reduz o ponto cego comum, nao
+  elimina. Melhor que autorrevisao, pior que revisao entre fornecedores.
+- O aviso aparece em TODA deliberacao, na tela de resultado.
+- Conferir manualmente cada [CONFERIR FUNDAMENTO] ficou mais importante.
+- Para voltar atras: basta acrescentar um provedor em PROVEDORES. A abstracao
+  continua intacta.
+
+ALCANCE DA TROCA
+- requirements.txt: openai removido. requirements-ia.txt: so anthropic.
+- Instalador coleta so a ANTHROPIC_API_KEY; CONFIGURAR_OPENAI virou
+  CONFIGURAR_IA; tools/test_openai.py virou tools/test_claude.py.
+- Lista branca de modelos em v7.py e os menus de settings.html trocados —
+  achado por teste: a tela validava contra modelos da OpenAI e teria
+  REJEITADO qualquer modelo Claude escolhido pelo usuario.
+- Faixas de plano (basico/economico/padrao/premium) refeitas com Claude;
+  em todas o critico e modelo diferente do redator.
+
+CUSTO POR ANALISE COMPLETA (processo de 328 paginas)
+  basico US$ 0,40 | economico US$ 0,61 | padrao US$ 1,67 | premium US$ 2,72
+
+MIGRACAO
+- A OPENAI_API_KEY e a GEMINI_API_KEY existentes deixam de ser lidas. Podem
+  ser removidas do .env.local e revogadas no painel de cada fornecedor.
+- Sem ANTHROPIC_API_KEY o JARBAS roda normalmente em modo local: tudo que nao
+  depende de IA continua funcionando.
+
+TESTES: 271 (eram 261)
+
+-----------------------------------------------------------------------
+9.0.1 — CORRECAO DA MIGRACAO 8.x -> 9.0
+-----------------------------------------------------------------------
+
+SINTOMA RELATADO
+  "A integracao OpenAI apresentou erro: Error code: 401 -
+   {'type':'error','error':{'type':'authentication_error',
+    'message':'invalid x-api-key'}}"
+  ... seguido de: gpt-5.6-sol
+
+DUAS CAUSAS, AS DUAS INTRODUZIDAS POR MIM NA 9.0.0
+
+1) O gateway confiava cegamente no .env.local.
+   Uma instalacao vinda da 8.x carrega JARBAS_AI_MODEL_LEGAL=gpt-5.6-sol.
+   O gateway lia esse valor e enviava o nome de um modelo da OpenAI para a
+   API da Anthropic. O erro que voltava nao dizia nada sobre a causa real,
+   que era configuracao velha.
+   CORRECAO: _model_env descarta qualquer modelo que nao comece com
+   'claude-' e usa o padrao. Validacao por PREFIXO, nao por lista fixa: um
+   modelo Claude novo passa a funcionar sem editar codigo.
+
+2) O instalador PRESERVAVA os modelos antigos.
+   A linha era "if(-not $LegalModel){...}": so preenchia quando ausente.
+   O valor da 8.x estava presente, entao sobrevivia a migracao.
+   CORRECAO: "-notlike 'claude-*'" descarta e substitui.
+
+TRANSPARENCIA EM VEZ DE TROCA SILENCIOSA
+- connection_status() passa a informar quais valores foram descartados e
+  por que. Trocar em silencio deixaria o usuario sem entender por que o
+  modelo configurado nao esta sendo usado.
+- O erro 401 agora orienta: "a chave da OpenAI NAO funciona aqui; gere uma
+  nova em console.anthropic.com".
+- Rotulo "A integracao OpenAI apresentou erro" corrigido para Claude.
+
+SOBRE O 401 EM SI
+A mensagem 'invalid x-api-key' com request_id 'req_01...' vem da Anthropic:
+confirma que o gateway novo esta rodando. A chave e que nao serve. A chave
+da OpenAI nao funciona na Anthropic — sao credenciais de empresas distintas.
+
+TESTES: 278 (eram 271)
+
+-----------------------------------------------------------------------
+9.0.2 — DIAGNOSTICO DE CHAVE
+-----------------------------------------------------------------------
+
+PROBLEMA: o erro 401 nao dizia qual era o problema
+  "Falha no modulo de IA: Error code: 401 - invalid x-api-key"
+
+Essa mensagem cobre tres situacoes diferentes, com solucoes diferentes:
+  a) nenhuma chave configurada
+  b) chave de OUTRO fornecedor colada no campo (engano mais provavel de
+     quem migrou da 8.x — a chave da OpenAI nao funciona na Anthropic)
+  c) chave da Anthropic revogada, expirada ou de outra organizacao
+
+Repetir o 401 cru obriga o usuario a descobrir sozinho em qual dos tres
+casos esta.
+
+CORRECAO: formato_chave() identifica o fornecedor pelo PREFIXO
+  sk-ant-*     Anthropic     (o correto)
+  sk-*         OpenAI        nao funciona aqui
+  AIza*        Google        nao funciona aqui
+  (vazia)      ausente
+
+A mensagem de erro, a tela de Configuracoes e o diagnostico passam a dizer
+qual dos casos e, e o que fazer.
+
+DIAGNOSTICO, NAO BLOQUEIO
+A funcao nunca impede a chamada. Se a Anthropic mudar o formato da chave,
+uma chave legitima nao pode parar de funcionar por causa desta checagem.
+Ha teste garantindo que formato_chave() nao levanta excecao.
+
+NOVO: tools/diagnosticar_ia.py + DIAGNOSTICAR_IA.cmd
+  [1/4] chave: formato, tamanho, ultimos 4 digitos (nunca a chave inteira)
+  [2/4] SDK anthropic instalado e versao
+  [3/4] modelos configurados e configuracao antiga descartada
+  [4/4] chamada real a API (so com --testar)
+
+TESTES: 287 (eram 278)

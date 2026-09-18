@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}JARBAS Jurídico{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body{% if organization and organization['primary_color'] %} style="--accent: {{ organization['primary_color'] }}; --accent2: {{ organization['primary_color'] }}"{% endif %}>
+{% if user and organization %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="workspace-brand">
+      {% if organization['logo_path'] %}
+        <img src="{{ organization['logo_path'] }}" class="workspace-logo" alt="{{ organization['name'] }}">
+      {% else %}
+        <div class="jarbas-mark">J</div>
+        <div><strong>{{ organization['brand_name'] or organization['name'] }}</strong><small>Workspace JARBAS</small></div>
+      {% endif %}
+    </div>
+    <div class="product-name"><strong>JARBAS</strong> Jurídico <span>8.3.1 · ENTERPRISE</span></div>
+    <nav class="side-nav">
+      <a href="/">⌂ <span>Dashboard</span></a>
+      <a href="/intake">✦ <span>Intake Inteligente</span></a>
+      <a href="/ai">✧ <span>Central IA</span></a>
+      <a href="/prazos">⏰ <span>Prazos</span></a>
+      <a href="/conselho">⚖ <span>Conselho tri-IA</span></a>
+      <a href="/crm">◈ <span>CRM & Leads</span></a>
+      <a href="/clients">♙ <span>Clientes</span></a>
+      <a href="/cases">⚖ <span>Processos</span></a>
+      <a href="/agenda">◷ <span>Agenda & Prazos</span></a>
+      <a href="/documents">▤ <span>Documentos</span></a>
+      <a href="/finance">$ <span>Financeiro</span></a>
+      <a href="/finance/chart">▦ <span>Plano de Contas</span></a>
+      <a href="/timesheet">◴ <span>Timesheet</span></a>
+      <a href="/reports">▥ <span>Relatórios</span></a>
+      <a href="/team">◎ <span>Equipe</span></a>
+      <a href="/audit">◫ <span>Auditoria</span></a>
+      <a href="/billing">◇ <span>Plano e uso</span></a>
+      <a href="/settings">⚙ <span>Configurações</span></a>
+      {% if user['is_superadmin'] %}<a href="/platform">◆ <span>Plataforma</span></a>{% endif %}
+    </nav>
+    <div class="sidebar-foot">
+      {% if subscription %}
+      <span class="eyebrow">{{ subscription['plan_name'] }}</span>
+      <strong>{{ credits_left }} créditos</strong>
+      <small>restantes neste mês</small>
+      {% endif %}
+      <div class="ai-mini {{ 'on' if office_ai_connected else 'off' }}">{{ 'IA OpenAI conectada' if office_ai_connected else 'IA externa não configurada' }}</div>
+    </div>
+  </aside>
+  <section class="workspace">
+    <header class="topbar">
+      <div class="topbrand"><span class="eyebrow">Workspace</span><strong>{{ organization['name'] }}</strong></div>
+      <form class="global-search" method="get" action="/search"><input name="q" placeholder="Buscar cliente, processo, documento ou financeiro…"><button class="button mini" type="submit">Buscar</button></form>
+      <div class="top-actions">
+        {% if workspaces|length > 1 %}
+        <form method="post" action="/switch-workspace" class="workspace-switch"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+          <select name="organization_id" onchange="this.form.submit()">{% for w in workspaces %}<option value="{{ w['id'] }}" {% if w['id']==organization['id'] %}selected{% endif %}>{{ w['name'] }}</option>{% endfor %}</select>
+        </form>
+        {% endif %}
+        <div class="user-chip"><span>{{ user['name'] }}</span><small>{{ organization['membership_role'] }}</small></div>
+        <a href="/logout" class="text-link">Sair</a>
+      </div>
+    </header>
+    <main class="content">{% block content %}{% endblock %}</main>
+    <footer>JARBAS Jurídico 8.3.1 · gestão integrada + copiloto jurídico + IA · {{ organization['name'] }}</footer>
+  </section>
+</div>
+{% else %}
+<main class="public-shell">{% block public_content %}{% endblock %}</main>
+{% endif %}
+</body>
+</html>
