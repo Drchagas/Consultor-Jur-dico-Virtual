@@ -1,0 +1,36 @@
+# JARBAS Jurídico como serviço do sistema (instalação sem container).
+#
+#   sudo useradd --system --home /opt/jarbas jarbas
+#   sudo cp deploy/jarbas.service /etc/systemd/system/
+#   sudo systemctl enable --now jarbas
+[Unit]
+Description=JARBAS Jurídico Enterprise
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=jarbas
+Group=jarbas
+WorkingDirectory=/opt/jarbas
+Environment=JARBAS_ENV=production
+Environment=JARBAS_DATA_DIR=/var/lib/jarbas
+# Segredos ficam FORA do diretório de código e fora do repositório.
+# Permissão recomendada: chmod 600, dono jarbas.
+EnvironmentFile=/etc/jarbas/jarbas.env
+ExecStart=/opt/jarbas/.venv/bin/python -m uvicorn app.main:app \
+    --host 127.0.0.1 --port 8765 --proxy-headers --workers 2
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/jarbas /opt/jarbas/logs
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

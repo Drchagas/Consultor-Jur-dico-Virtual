@@ -1,0 +1,120 @@
+# JARBAS Jurídico Enterprise — operação em servidor Linux.
+#
+# Use com um arquivo .env ao lado deste (NUNCA versionado):
+#   cp deploy/env.servidor.example .env
+#   python3 -c 'import secrets;print(secrets.token_urlsafe(48))'   # JARBAS_SECRET_KEY
+#   docker compose up -d --build
+#
+# HTTPS fica a cargo do Caddy, no perfil "https". Sem HTTPS, o cookie de
+# sessão trafega em claro e qualquer rede no caminho lê a sessão de quem
+# está com os autos abertos.
+#   docker compose --profile https up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jarbas}
+      POSTGRES_USER: ${POSTGRES_USER:-jarbas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      # Autos em português: acentuação e ordenação corretas desde a criação
+      # do cluster. Mudar isso depois exige recriar o banco.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    volumes:
+      - jarbas-db:/var/lib/postgresql/data
+    # O banco não é publicado no host: só o JARBAS fala com ele, pela rede
+    # interna do compose. Publicar a 5432 exporia os autos à internet.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jarbas} -d ${POSTGRES_DB:-jarbas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  jarbas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      JARBAS_ENV: production
+      JARBAS_SECRET_KEY: ${JARBAS_SECRET_KEY:?gere com python -c 'import secrets;print(secrets.token_urlsafe(48))'}
+      JARBAS_ALLOWED_HOSTS: ${JARBAS_ALLOWED_HOSTS:?informe o dominio publico}
+      JARBAS_PUBLIC_URL: ${JARBAS_PUBLIC_URL:-}
+      JARBAS_HTTPS_ONLY: ${JARBAS_HTTPS_ONLY:-1}
+      JARBAS_2FA_OBRIGATORIO: ${JARBAS_2FA_OBRIGATORIO:-1}
+      JARBAS_PUBLIC_SIGNUP: ${JARBAS_PUBLIC_SIGNUP:-0}
+      # Um salto: o Caddy (ou o proxy do escritório) é o único intermediário.
+      # Ver app/main.py:login_client_ip — sem isto, o bloqueio de força bruta
+      # tranca o escritório inteiro pelo IP do proxy.
+      JARBAS_TRUSTED_PROXY_HOPS: ${JARBAS_TRUSTED_PROXY_HOPS:-1}
+      JARBAS_DATA_DIR: /var/lib/jarbas
+      DATABASE_URL: postgresql://${POSTGRES_USER:-jarbas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-jarbas}
+      JARBAS_ADMIN_EMAIL: ${JARBAS_ADMIN_EMAIL:?informe o e-mail do administrador}
+      # Senha de bootstrap: usada UMA vez, para criar o primeiro usuário.
+      # Depois disso o hash está no banco e a variável pode sair do .env.
+      JARBAS_BOOTSTRAP_ADMIN_PASSWORD: ${JARBAS_BOOTSTRAP_ADMIN_PASSWORD:-}
+      JARBAS_UF: ${JARBAS_UF:-RS}
+      JARBAS_RETENCAO_LIXEIRA_DIAS: ${JARBAS_RETENCAO_LIXEIRA_DIAS:-30}
+      JARBAS_MAX_UPLOAD_MB: ${JARBAS_MAX_UPLOAD_MB:-200}
+      JARBAS_WORKERS: ${JARBAS_WORKERS:-2}
+      # IA: opcional. Sem a chave o sistema opera como gestão de processos.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      JARBAS_AI_TETO_USD_MES: ${JARBAS_AI_TETO_USD_MES:-50}
+      JARBAS_AI_MODEL_LEGAL: ${JARBAS_AI_MODEL_LEGAL:-claude-opus-5}
+      JARBAS_AI_MODEL_INTAKE: ${JARBAS_AI_MODEL_INTAKE:-claude-sonnet-5}
+      JARBAS_AI_MODEL_ROUTINE: ${JARBAS_AI_MODEL_ROUTINE:-claude-haiku-4-5-20251001}
+    volumes:
+      - jarbas-dados:/var/lib/jarbas
+    # Sem o perfil https, publica só em 127.0.0.1: o sistema fica acessível
+    # na máquina e por túnel SSH, nunca aberto à internet por engano.
+    ports:
+      - "${JARBAS_BIND:-127.0.0.1}:${JARBAS_PORT_HOST:-8765}:8765"
+    security_opt:
+      - no-new-privileges:true
+
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["backup"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      JARBAS_DATA_DIR: /var/lib/jarbas
+      DATABASE_URL: postgresql://${POSTGRES_USER:-jarbas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-jarbas}
+      JARBAS_BACKUP_DIR: /backups
+      JARBAS_BACKUP_MANTER: ${JARBAS_BACKUP_MANTER:-14}
+    volumes:
+      - jarbas-dados:/var/lib/jarbas:ro
+      - ${JARBAS_BACKUP_HOST_DIR:-./backups}:/backups
+    command: ["backup"]
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - jarbas
+    environment:
+      JARBAS_DOMINIO: ${JARBAS_DOMINIO:?informe o dominio para o certificado}
+      JARBAS_ADMIN_EMAIL: ${JARBAS_ADMIN_EMAIL}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+
+volumes:
+  jarbas-dados:
+  jarbas-db:
+  caddy-data:
+  caddy-config:

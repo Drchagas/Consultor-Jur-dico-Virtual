@@ -1,0 +1,14 @@
+[Unit]
+Description=Backup diário do JARBAS Jurídico
+
+[Timer]
+# 12:10 pega o movimento da manhã; 19:40 fecha o dia. Dois horários porque
+# perder um dia inteiro de despachos e prazos é caro, e a cópia é barata.
+OnCalendar=*-*-* 12:10
+OnCalendar=*-*-* 19:40
+# Servidor desligado no horário: roda no próximo boot em vez de pular o dia.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

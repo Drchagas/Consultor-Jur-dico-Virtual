@@ -1,0 +1,33 @@
+# HTTPS para o JARBAS. O Caddy obtém e renova o certificado sozinho, desde
+# que a porta 80 esteja alcançável e o DNS do domínio aponte para esta
+# máquina.
+#
+# Sem HTTPS, o cookie de sessão viaja em claro: qualquer rede no caminho
+# (wi-fi de fórum, roteador de hotel, provedor) lê a sessão de quem está com
+# os autos abertos. Com autos sob sigilo profissional isso não é opcional.
+
+{$JARBAS_DOMINIO} {
+	tls {$JARBAS_ADMIN_EMAIL}
+
+	encode gzip
+
+	# O JARBAS já emite os próprios cabeçalhos de segurança (CSP, HSTS,
+	# X-Frame-Options). O proxy não os duplica: cabeçalho repetido é
+	# ignorado por parte dos navegadores e vira falsa sensação de proteção.
+	reverse_proxy jarbas:8765 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Autos chegam em PDF de centenas de páginas. O padrão do Caddy não
+	# limita o corpo, mas o limite real é JARBAS_MAX_UPLOAD_MB na aplicação.
+	request_body {
+		max_size 250MB
+	}
+
+	log {
+		output file /data/acesso.log {
+			roll_size 20MB
+			roll_keep 10
+		}
+	}
+}

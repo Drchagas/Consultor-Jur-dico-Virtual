@@ -1,0 +1,33 @@
+# Backup do JARBAS. Instalação sem container (com container, use o serviço
+# "backup" do docker-compose e um timer que chame `docker compose run`).
+#
+#   sudo cp deploy/jarbas-backup.* /etc/systemd/system/
+#   sudo systemctl enable --now jarbas-backup.timer
+#   systemctl list-timers jarbas-backup.timer
+[Unit]
+Description=Cópia de segurança conferida do JARBAS Jurídico
+Documentation=file:///opt/jarbas/README.md
+
+[Service]
+Type=oneshot
+User=jarbas
+Group=jarbas
+WorkingDirectory=/opt/jarbas
+Environment=JARBAS_DATA_DIR=/var/lib/jarbas
+Environment=JARBAS_BACKUP_DIR=/var/backups/jarbas
+Environment=JARBAS_BACKUP_MANTER=14
+EnvironmentFile=-/etc/jarbas/jarbas.env
+ExecStart=/opt/jarbas/.venv/bin/python /opt/jarbas/tools/backup.py
+
+# O backup lê autos e escreve cópias: não precisa de mais nada do sistema.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/jarbas
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

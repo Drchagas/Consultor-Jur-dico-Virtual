@@ -1,0 +1,21 @@
+# Nada de dado de cliente, segredo ou artefato local dentro da imagem.
+.git
+.github
+data/
+logs/
+runtime/
+backups/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.env
+.env.local
+*.db
+*.sqlite3
+CREDENCIAIS_INICIAIS.txt
+CREDENCIAL_DESENVOLVEDOR.txt
+.pytest_cache/
+tests/
+installer/
+scripts/

@@ -144,9 +144,34 @@ def has_column(conn: Connection, table: str, column: str) -> bool:
 
 
 def ensure_column(conn: Connection, table: str, definition: str) -> None:
+    """Acrescenta a coluna se ela ainda não existir.
+
+    ATENÇÃO: TRÊS argumentos — nome e tipo vão juntos na mesma string
+    (`ensure_column(conn, "deadlines", "count_start TEXT")`). Chamar com
+    quatro derruba init_db inteiro com TypeError; já quebrou três releases.
+
+    Verificar e depois alterar é uma corrida quando mais de um processo sobe
+    ao mesmo tempo — e é exatamente o que acontece com uvicorn --workers 2 ou
+    com duas instâncias da aplicação apontando para o mesmo banco. Os dois
+    veem a coluna faltando, os dois emitem o ALTER, e o segundo morre com
+    "duplicate column name" ANTES de servir a primeira requisição.
+
+    No PostgreSQL o próprio banco resolve com IF NOT EXISTS. O SQLite não
+    tem essa cláusula, então a corrida perdida é absorvida: se o erro for
+    justamente o de coluna duplicada, o trabalho já foi feito por quem
+    chegou primeiro e não há nada a corrigir. Qualquer outro erro sobe.
+    """
     column = definition.split()[0]
-    if not has_column(conn, table, column):
+    if has_column(conn, table, column):
+        return
+    if conn.backend == "postgres":
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {definition}")
+        return
+    try:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+    except sqlite3.OperationalError as exc:
+        if "duplicate column" not in str(exc).lower():
+            raise
 
 
 SQLITE_SCHEMA = """
