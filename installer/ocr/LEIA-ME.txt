@@ -1,0 +1,22 @@
+OCR EM PORTUGUES - DADOS DE IDIOMA DO TESSERACT
+
+Arquivo: por.traineddata
+Origem.: https://github.com/tesseract-ocr/tessdata_fast
+Licenca: Apache License 2.0
+SHA-256: c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb
+Tamanho: 1.982.756 bytes
+
+POR QUE ESTE ARQUIVO VIAJA NO PACOTE
+
+O instalador do Tesseract para Windows instala o idioma ingles por padrao.
+Sem o pacote em portugues, o OCR de um auto brasileiro devolve texto
+inutilizavel - ele tenta ler "INTIMACAO" com o modelo do ingles.
+
+Baixar na hora da instalacao nem sempre funciona: rede de escritorio costuma
+bloquear o GitHub. Com o arquivo aqui dentro, o portugues fica garantido
+sempre que o Tesseract existir na maquina.
+
+Variante "fast" escolhida de proposito: e a recomendada pelo projeto e le um
+processo de centenas de paginas em uma fracao do tempo da variante "best",
+com diferenca de acerto pequena em documento de texto impresso - que e o caso
+de um auto digitalizado.

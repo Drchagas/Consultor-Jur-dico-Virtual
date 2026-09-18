@@ -21,6 +21,11 @@ docs/*.txt text eol=crlf
 *.css text eol=lf
 
 # Binários: nunca converter.
+#
+# .traineddata é o modelo de OCR. Se o git o tratasse como texto e trocasse
+# LF por CRLF, o modelo seria corrompido em silêncio — o Tesseract carregaria
+# um arquivo inválido e o OCR devolveria lixo, sem erro que apontasse a causa.
+*.traineddata binary
 *.jpeg binary
 *.jpg binary
 *.png binary

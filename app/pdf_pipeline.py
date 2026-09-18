@@ -215,11 +215,55 @@ def _extract_pdfplumber_page(path: Path, idx: int) -> str:
         logger.setLevel(old_level)
 
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Idioma português do OCR que viaja no pacote de instalação. O instalador do
+# Tesseract traz só o inglês; sem isto, o OCR de um auto brasileiro tenta ler
+# "INTIMAÇÃO" com o modelo do inglês e devolve texto inutilizável.
+_POR_EMBUTIDO = BASE_DIR / "installer" / "ocr" / "por.traineddata"
+
+
+def _garantir_portugues(tessdata: Path) -> bool:
+    """Copia o português para o tessdata da instalação, se estiver faltando.
+
+    Vale a pena mesmo quando o advogado instalou o Tesseract por conta
+    própria: o instalador oficial não marca o português por padrão, e o
+    sintoma — OCR que roda e devolve letra embaralhada — não aponta para a
+    causa. Melhor best-effort: se não houver permissão de escrita (Tesseract
+    em Program Files sem administrador), seguimos com o que existe.
+    """
+    try:
+        if not tessdata.is_dir() or (tessdata / "por.traineddata").is_file():
+            return False
+        if not _POR_EMBUTIDO.is_file():
+            return False
+        shutil.copy2(_POR_EMBUTIDO, tessdata / "por.traineddata")
+        LOGGER.info("idioma português do OCR instalado em %s", tessdata)
+        return True
+    except Exception as exc:
+        LOGGER.warning("não consegui instalar o português do OCR em %s: %s", tessdata, exc)
+        return False
+
+
 def _detect_tesseract() -> tuple[bool, Optional[Path]]:
+    # Caminho explícito vence tudo: é como o INSTALAR_OCR.ps1 registra uma
+    # instalação fora dos lugares padrão, sem depender do PATH do Windows —
+    # que só é relido quando a sessão reinicia.
+    indicado = (os.getenv("JARBAS_TESSERACT", "") or "").strip().strip('"')
+    if indicado:
+        alvo = Path(indicado)
+        if alvo.is_dir():
+            alvo = alvo / ("tesseract.exe" if os.name == "nt" else "tesseract")
+        if alvo.is_file():
+            return _preparar_tesseract(alvo.resolve())
+
     found = shutil.which("tesseract")
     candidate_path: Optional[Path] = Path(found).resolve() if found else None
     if candidate_path is None and os.name == "nt":
         candidates = [
+            # Cópia portátil dentro da própria instalação do JARBAS: não exige
+            # administrador e some junto quando o sistema é desinstalado.
+            BASE_DIR / "runtime" / "tesseract" / "tesseract.exe",
             Path(os.getenv("ProgramFiles", r"C:\Program Files")) / "Tesseract-OCR" / "tesseract.exe",
             Path(os.getenv("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Tesseract-OCR" / "tesseract.exe",
             Path(os.getenv("LOCALAPPDATA", "")) / "Programs" / "Tesseract-OCR" / "tesseract.exe",
@@ -230,14 +274,21 @@ def _detect_tesseract() -> tuple[bool, Optional[Path]]:
                 break
     if candidate_path is None:
         return False, None
-    parent = str(candidate_path.parent)
+    return _preparar_tesseract(candidate_path)
+
+
+def _preparar_tesseract(caminho: Path) -> tuple[bool, Optional[Path]]:
+    """Deixa o ambiente pronto para chamar o binário encontrado."""
+    parent = str(caminho.parent)
     path_parts = os.environ.get("PATH", "").split(os.pathsep)
     if parent and parent not in path_parts:
         os.environ["PATH"] = parent + os.pathsep + os.environ.get("PATH", "")
-    tessdata = candidate_path.parent / "tessdata"
-    if tessdata.is_dir() and not os.getenv("TESSDATA_PREFIX"):
-        os.environ["TESSDATA_PREFIX"] = str(tessdata)
-    return True, candidate_path
+    tessdata = caminho.parent / "tessdata"
+    if tessdata.is_dir():
+        _garantir_portugues(tessdata)
+        if not os.getenv("TESSDATA_PREFIX"):
+            os.environ["TESSDATA_PREFIX"] = str(tessdata)
+    return True, caminho
 
 
 def _tesseract_available() -> bool:
@@ -450,7 +501,7 @@ def extract_pdf(
     if ocr_pages:
         note_parts.append(f"OCR local usado em {ocr_pages} página(s).")
     if status == "needs_ocr":
-        note_parts.append("Nenhum texto utilizável foi extraído: o PDF é digitalizado (imagem). Instale o Tesseract para OCR local ou configure a chave da Anthropic.")
+        note_parts.append("Nenhum texto utilizável foi extraído: o PDF é digitalizado (imagem). Rode INSTALAR_OCR.cmd para ler localmente, ou configure a chave da Anthropic.")
     elif status == "partial_ocr":
         note_parts.append("Há páginas sem texto suficiente. Com a chave da Anthropic configurada, o Copiloto lê essas páginas direto do PDF original.")
     if max_pages and page_count > sampled:

@@ -57,7 +57,18 @@ perder processos.
    Uma vez por semestre, teste restaurar uma copia: backup que nunca foi
    restaurado nao e backup.
 
-3. CONFIGURE A IA (OPCIONAL).
+3. AUTOS DIGITALIZADOS (OCR).
+   PDF gerado pelo eproc ja tem texto e e lido sem nada a mais. Auto
+   ESCANEADO e so imagem: rode INSTALAR_OCR.cmd para o JARBAS conseguir ler
+   localmente, sem pagar por pagina a IA. O idioma portugues ja vai dentro
+   deste pacote - e ele que decide o resultado, porque o instalador do
+   Tesseract marca so o ingles por padrao e o OCR em ingles devolve letra
+   embaralhada num auto brasileiro.
+
+   Depois de instalar, em um processo ja cadastrado use
+   Copiloto > Reprocessar todos os PDFs para reler os autos antigos.
+
+4. CONFIGURE A IA (OPCIONAL).
    Execute CONFIGURAR_IA.cmd e cole a chave gerada em console.anthropic.com
    (comeca com sk-ant-). O provedor e a Anthropic; chave da OpenAI NAO
    funciona. Sem chave, o JARBAS opera normalmente como gestao de processos,
@@ -73,6 +84,7 @@ perder processos.
 
 Nao abre ................. DIAGNOSTICO_JARBAS.cmd
 PDF nao e lido ........... DIAGNOSTICAR_PDF.cmd
+Auto digitalizado ........ INSTALAR_OCR.cmd
 IA nao responde .......... DIAGNOSTICAR_IA.cmd
 Arquivo alterado ......... VERIFICAR_INTEGRIDADE.cmd
 Esqueceu a senha ......... RESETAR_SENHA.cmd

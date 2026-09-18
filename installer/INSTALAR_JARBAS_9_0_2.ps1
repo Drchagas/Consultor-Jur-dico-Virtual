@@ -92,6 +92,7 @@ try{
   foreach($name in @('app','tools')){$dst=Join-Path $InstallDir $name;if(Test-Path $dst){Remove-Item $dst -Recurse -Force}}
   Copy-Item (Join-Path $Payload 'app') -Destination $InstallDir -Recurse -Force;Copy-Item $ToolsSource -Destination $InstallDir -Recurse -Force;$TestsSource=Join-Path $SourceDir 'tests';if(Test-Path $TestsSource){Copy-Item $TestsSource -Destination $InstallDir -Recurse -Force}
   foreach($f in Get-ChildItem $ScriptsSource -Filter '*.ps1'){Copy-Item $f.FullName (Join-Path $InstallDir $f.Name) -Force}
+  $ocrSrc=Join-Path $SourceDir 'ocr';if(Test-Path $ocrSrc){$ocrDst=Join-Path $InstallDir 'installer\ocr';New-Item -ItemType Directory -Force -Path $ocrDst|Out-Null;Copy-Item (Join-Path $ocrSrc '*') $ocrDst -Recurse -Force}
   foreach($name in @('requirements.txt','requirements-ia.txt','VERSION.txt','LICENSE_PROPRIETARY.txt','README.md','AUDITORIA_8_3.md','AUDITORIA_8_3_1.md','SEGURANCA_LGPD_IA.md','MATRIZ_SISTEMA_PRINCIPAL.md','MATRIZ_FUNCIONAL_7_0.md','ARQUITETURA_SAAS_7_0.md','ROADMAP_PRODUCAO.md','CONSELHO_IA.md','CAPACIDADE_2000_ASSINANTES.md','NOTAS_DA_VERSAO_9_0_2.txt')){$src=Join-Path $Payload $name;if(Test-Path $src){Copy-Item $src -Destination $InstallDir -Force}}
   if(Test-Path (Join-Path $preserve 'workspaces')){Merge-Dir (Join-Path $preserve 'workspaces') (Join-Path $InstallDir 'app\static\workspaces')}
 
@@ -178,7 +179,7 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
 
   Say '[14/19] Instalando ferramentas de manutencao e integridade...' Cyan
   foreach($f in Get-ChildItem $ScriptsSource -Filter '*.ps1'){Copy-Item $f.FullName (Join-Path $InstallDir $f.Name) -Force}
-  $wrappers=@{'INICIAR_JARBAS.cmd'='INICIAR_JARBAS.ps1';'PARAR_JARBAS.cmd'='PARAR_JARBAS.ps1';'DIAGNOSTICO_JARBAS.cmd'='DIAGNOSTICO_JARBAS.ps1';'CONFIGURAR_OPENAI.cmd'='CONFIGURAR_IA.ps1';'CONFIGURAR_IA.cmd'='CONFIGURAR_IA.ps1';'RESETAR_SENHA.cmd'='RESETAR_SENHA.ps1';'BACKUP_JARBAS.cmd'='BACKUP_JARBAS.ps1';'BACKUP_AUTOMATICO.cmd'='BACKUP_AUTOMATICO.ps1';'DESINSTALAR_JARBAS.cmd'='DESINSTALAR_JARBAS.ps1';'VERIFICAR_INTEGRIDADE.cmd'='VERIFICAR_INTEGRIDADE.ps1';'REPROCESSAR_PDFS.cmd'='REPROCESSAR_PDFS.ps1'}
+  $wrappers=@{'INICIAR_JARBAS.cmd'='INICIAR_JARBAS.ps1';'PARAR_JARBAS.cmd'='PARAR_JARBAS.ps1';'DIAGNOSTICO_JARBAS.cmd'='DIAGNOSTICO_JARBAS.ps1';'CONFIGURAR_OPENAI.cmd'='CONFIGURAR_IA.ps1';'CONFIGURAR_IA.cmd'='CONFIGURAR_IA.ps1';'RESETAR_SENHA.cmd'='RESETAR_SENHA.ps1';'BACKUP_JARBAS.cmd'='BACKUP_JARBAS.ps1';'BACKUP_AUTOMATICO.cmd'='BACKUP_AUTOMATICO.ps1';'INSTALAR_OCR.cmd'='INSTALAR_OCR.ps1';'DESINSTALAR_JARBAS.cmd'='DESINSTALAR_JARBAS.ps1';'VERIFICAR_INTEGRIDADE.cmd'='VERIFICAR_INTEGRIDADE.ps1';'REPROCESSAR_PDFS.cmd'='REPROCESSAR_PDFS.ps1'}
   foreach($kv in $wrappers.GetEnumerator()){[IO.File]::WriteAllText((Join-Path $InstallDir $kv.Key),"@echo off`r`nchcp 65001 >nul`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0$($kv.Value)`"`r`n",[Text.ASCIIEncoding]::new())}
   Write-InstalledManifest
 
@@ -228,7 +229,23 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
   Say '[18/19] Criando atalhos profissionais...' Cyan
   $desktop=[Environment]::GetFolderPath('Desktop');Get-ChildItem $desktop -Filter 'JARBAS*.lnk' -ErrorAction SilentlyContinue|Remove-Item -Force -ErrorAction SilentlyContinue;$ws=New-Object -ComObject WScript.Shell;$shortcut=$ws.CreateShortcut((Join-Path $desktop 'JARBAS Juridico 9.0.2.lnk'));$shortcut.TargetPath="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe";$shortcut.Arguments="-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $InstallDir 'INICIAR_JARBAS.ps1')`"";$shortcut.WorkingDirectory=$InstallDir;$shortcut.Description='JARBAS Juridico Enterprise 9.0.2';$shortcut.Save();$startDir=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\JARBAS Juridico';New-Item -ItemType Directory -Force -Path $startDir|Out-Null;Copy-Item (Join-Path $desktop 'JARBAS Juridico 9.0.2.lnk') (Join-Path $startDir 'JARBAS Juridico 9.0.2.lnk') -Force
 
-  Say '[19/19] Agendando backup diario e registrando instalacao...' Cyan
+  Say '[19/19] Instalando OCR, agendando backup e registrando instalacao...' Cyan
+  # OCR em etapa TOLERANTE A FALHA, como o SDK de IA: um escritorio nao pode
+  # ficar sem sistema de processos porque o antivirus bloqueou um download.
+  # Sem OCR o JARBAS le normalmente todo PDF com camada de texto; so os autos
+  # DIGITALIZADOS ficam sem leitura local.
+  try{
+    $ocrScript=Join-Path $InstallDir 'INSTALAR_OCR.ps1'
+    if(Test-Path $ocrScript){
+      & $ocrScript
+      if($LASTEXITCODE -eq 0){Say 'OCR instalado com portugues.' Green}
+      else{Say 'OCR nao ficou completo. Rode INSTALAR_OCR.cmd depois; o resto do sistema esta pronto.' Yellow}
+    }
+  }catch{
+    Say 'Nao foi possivel instalar o OCR agora. Rode INSTALAR_OCR.cmd depois.' Yellow
+    Log ('Instalacao do OCR falhou: '+$_.Exception.Message)
+  }
+
   # Backup manual e backup que nao acontece: depende de alguem lembrar no dia
   # em que o escritorio esta corrido — que e o dia em que a maquina falha.
   try{

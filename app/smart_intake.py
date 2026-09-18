@@ -330,7 +330,7 @@ def _local_detect(path: Path) -> dict[str, Any]:
     quality = "alta" if number and len(parties) >= 2 else "media" if number or parties else "baixa"
     warnings: list[str] = []
     if preview.get("status") == "needs_ocr":
-        warnings.append("O PDF é digitalizado (imagem), sem texto para ler. Instale o Tesseract para OCR local ou configure a chave da Anthropic; sem um dos dois, preencha os campos à mão.")
+        warnings.append("O PDF é digitalizado (imagem), sem texto para ler. Rode INSTALAR_OCR.cmd para habilitar a leitura local, ou configure a chave da Anthropic; sem um dos dois, preencha os campos à mão.")
     elif preview.get("status") == "partial_ocr":
         warnings.append("A leitura do texto saiu parcial. Confira os campos preenchidos: com a chave da Anthropic configurada, o JARBAS lê as páginas restantes direto do PDF.")
     if not parties:

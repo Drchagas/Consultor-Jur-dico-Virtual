@@ -83,6 +83,13 @@ def montar(destino: Path) -> Path:
         if arq.is_file():
             shutil.copy2(arq, destino / arq.name)
 
+    # 6a. Dados de idioma do OCR. Viajam no pacote porque a rede do escritório
+    #     costuma bloquear o GitHub, e sem o português o OCR de um auto
+    #     brasileiro devolve texto inutilizável.
+    ocr = RAIZ / "installer" / "ocr"
+    if ocr.is_dir():
+        shutil.copytree(ocr, destino / "ocr", ignore=IGNORAR)
+
     # 6b. LEIA_PRIMEIRO na RAIZ do pacote, não só dentro de payload/.
     #     Quem extrai o ZIP vê uma pasta com .cmd e uma pasta payload/; sem
     #     um arquivo de orientação ao lado dos executáveis, a primeira ação

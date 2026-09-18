@@ -66,6 +66,7 @@ Depois de instalado, na pasta `%LOCALAPPDATA%\JARBAS_Enterprise`:
 | `BACKUP_JARBAS.cmd` | cópia de segurança agora |
 | `BACKUP_AUTOMATICO.ps1` | agenda ou cancela o backup diário |
 | `CONFIGURAR_IA.cmd` | cadastra a chave do Claude |
+| `INSTALAR_OCR.cmd` | habilita a leitura de autos digitalizados |
 | `DIAGNOSTICO_JARBAS.cmd` | relatório para o suporte |
 | `VERIFICAR_INTEGRIDADE.cmd` | confere se os arquivos foram alterados |
 | `RESETAR_SENHA.cmd` | redefine a senha de um usuário |
@@ -129,6 +130,21 @@ não funciona — são empresas distintas.
 
 **Nunca** envie a chave por WhatsApp, e-mail ou commit. Quem tem a chave gasta
 na sua conta.
+
+### Autos digitalizados (OCR)
+
+Um PDF gerado pelo eproc tem camada de texto e é lido sem IA e sem OCR. Um
+auto **escaneado** — petição assinada à mão, documento antigo, ofício de outro
+órgão — é só imagem. Para lê-lo sem pagar por página à IA, rode
+**`INSTALAR_OCR.cmd`**: ele instala o Tesseract sem exigir administrador e
+garante o idioma português, que viaja dentro do pacote de instalação.
+
+O idioma é o que decide o resultado. O instalador do Tesseract marca só o
+inglês por padrão, e com ele o OCR de um auto brasileiro **roda e devolve
+letra embaralhada** — um sintoma que não aponta para a causa.
+
+Depois de instalar, em um processo já cadastrado use *Copiloto → Reprocessar
+todos os PDFs* para reler os autos que antes ficaram sem texto.
 
 ### Teto de gasto
 
@@ -258,7 +274,7 @@ Migrações de schema são automáticas e não apagam tabela existente.
 | Container não sobe | `docker compose logs jarbas` — o entrypoint diz qual variável falta |
 | `/health` não responde | banco inacessível; confira o volume e a `DATABASE_URL` |
 | Erro interno com código | o código está em `logs/runtime-errors.log` |
-| PDF não é lido | `DIAGNOSTICAR_PDF.cmd`; digitalizado precisa de OCR ou IA |
+| PDF não é lido | `DIAGNOSTICAR_PDF.cmd`; se for digitalizado, rode `INSTALAR_OCR.cmd` |
 | IA não responde | `DIAGNOSTICAR_IA.cmd`; confira chave e teto de gasto |
 | Arquivo alterado | `VERIFICAR_INTEGRIDADE.cmd` |
 | Perdeu o celular do 2FA | use um código de recuperação no campo do código |
