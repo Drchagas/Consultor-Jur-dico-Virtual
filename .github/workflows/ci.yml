@@ -1,0 +1,91 @@
+# Portão de qualidade do JARBAS.
+#
+# O CLAUDE.md manda rodar pytest e check_templates antes de cada commit. Isso
+# depende de alguém lembrar. Aqui não depende: um push que quebre a suíte
+# aparece vermelho no repositório, e não na instalação do escritório.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Testes e verificações
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Mesma versão do runtime portátil que o instalador do Windows
+          # baixa. Testar em outra versão testa outro sistema.
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Suíte de testes
+        run: pytest
+
+      - name: Variáveis de template
+        # UndefinedError em template só aparece quando o advogado abre a tela
+        # — depois de a análise de IA já ter sido paga. Já derrubou três rotas
+        # em produção.
+        run: python tools/check_templates.py
+
+      - name: Pacote do instalador Windows monta e confere
+        run: python tools/build_installer.py /tmp/pacote-ci
+
+  segredos:
+    name: Nenhum segredo versionado
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Procurar credenciais no que foi commitado
+        # Um repositório de escritório de advocacia não pode carregar chave de
+        # API nem banco de cliente. Achar depois do push é tarde: o histórico
+        # do git preserva, e a chave precisa ser revogada.
+        run: |
+          set -u
+          falhou=0
+
+          if git ls-files | grep -E '\.(db|sqlite3)$'; then
+            echo "::error::Banco de dados versionado."
+            falhou=1
+          fi
+
+          if git ls-files | grep -E '(^|/)\.env(\.local)?$'; then
+            echo "::error::Arquivo .env versionado."
+            falhou=1
+          fi
+
+          if git ls-files | grep -iE 'CREDENCIAI?S?_|CREDENCIAL_'; then
+            echo "::error::Arquivo de credenciais versionado."
+            falhou=1
+          fi
+
+          # sk-ant-: Anthropic. APP_USR-: Mercado Pago em produção.
+          achados=$(git grep -nIE 'sk-ant-[A-Za-z0-9_-]{20,}|APP_USR-[0-9a-f-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' -- . ':!tests' ':!docs' || true)
+          if [ -n "$achados" ]; then
+            echo "::error::Possível credencial no código:"
+            echo "$achados"
+            falhou=1
+          fi
+
+          if [ "$falhou" -ne 0 ]; then
+            echo
+            echo "Se uma chave real chegou a ser commitada, REVOGUE-A no painel"
+            echo "do provedor antes de qualquer outra coisa. Remover o arquivo"
+            echo "não a remove do histórico."
+            exit 1
+          fi
+          echo "Nenhum segredo encontrado."

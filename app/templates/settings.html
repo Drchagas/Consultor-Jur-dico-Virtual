@@ -21,6 +21,10 @@
 {% else %}<div class="safe-note">A chave global é administrada pelo Super Admin/servidor. Nesta instalação, a configuração por formulário está desabilitada.</div>{% endif %}
 <a class="button" href="/ai">Abrir Central IA</a><h3>Documentos automáticos</h3><div class="feature-list"><div><b>Cliente</b><span>nome, CPF/CNPJ, RG, profissão, estado civil e endereço vêm do cadastro mestre</span></div><div><b>Escritório</b><span>marca, advogado responsável, OAB, endereço, e-mail e telefone vêm deste workspace</span></div><div><b>Revisão</b><span>procurações, AJG e peças são minutas e devem ser conferidas antes da assinatura/protocolo</span></div></div></section></div>
 
+<section class="panel"><span class="eyebrow">Segurança da conta</span><h2>Verificação em duas etapas</h2>
+<p class="muted">Segunda etapa de verificação no login. Com autos sob sigilo profissional, uma senha vazada não pode ser suficiente para abrir os processos de todos os clientes.</p>
+<a class="button ghost" href="/settings/2fa">Configurar verificação em duas etapas</a></section>
+
 <section class="panel"><span class="eyebrow">Segurança da conta</span><h2>Alterar minha senha</h2>
 {% if request.query_params.get('password_error') == 'current' %}<div class="alert danger">A senha atual não confere.</div>{% elif request.query_params.get('password_error') == 'policy' %}<div class="alert danger">A nova senha deve ter ao menos 12 caracteres e coincidir com a confirmação.</div>{% endif %}
 <form method="post" action="/account/password" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><label>Senha atual<input type="password" name="current_password" required autocomplete="current-password"></label><label>Nova senha<input type="password" name="new_password" minlength="12" required autocomplete="new-password"></label><label>Confirmar nova senha<input type="password" name="confirm_password" minlength="12" required autocomplete="new-password"></label><button>Alterar senha e encerrar sessão</button></form><div class="safe-note">A senha é armazenada somente como hash; após a troca será necessário entrar novamente.</div></section>

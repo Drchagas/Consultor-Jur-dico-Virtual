@@ -178,7 +178,7 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
 
   Say '[14/19] Instalando ferramentas de manutencao e integridade...' Cyan
   foreach($f in Get-ChildItem $ScriptsSource -Filter '*.ps1'){Copy-Item $f.FullName (Join-Path $InstallDir $f.Name) -Force}
-  $wrappers=@{'INICIAR_JARBAS.cmd'='INICIAR_JARBAS.ps1';'PARAR_JARBAS.cmd'='PARAR_JARBAS.ps1';'DIAGNOSTICO_JARBAS.cmd'='DIAGNOSTICO_JARBAS.ps1';'CONFIGURAR_OPENAI.cmd'='CONFIGURAR_IA.ps1';'RESETAR_SENHA.cmd'='RESETAR_SENHA.ps1';'BACKUP_JARBAS.cmd'='BACKUP_JARBAS.ps1';'BACKUP_AUTOMATICO.cmd'='BACKUP_AUTOMATICO.ps1';'DESINSTALAR_JARBAS.cmd'='DESINSTALAR_JARBAS.ps1';'VERIFICAR_INTEGRIDADE.cmd'='VERIFICAR_INTEGRIDADE.ps1';'REPROCESSAR_PDFS.cmd'='REPROCESSAR_PDFS.ps1'}
+  $wrappers=@{'INICIAR_JARBAS.cmd'='INICIAR_JARBAS.ps1';'PARAR_JARBAS.cmd'='PARAR_JARBAS.ps1';'DIAGNOSTICO_JARBAS.cmd'='DIAGNOSTICO_JARBAS.ps1';'CONFIGURAR_OPENAI.cmd'='CONFIGURAR_IA.ps1';'CONFIGURAR_IA.cmd'='CONFIGURAR_IA.ps1';'RESETAR_SENHA.cmd'='RESETAR_SENHA.ps1';'BACKUP_JARBAS.cmd'='BACKUP_JARBAS.ps1';'BACKUP_AUTOMATICO.cmd'='BACKUP_AUTOMATICO.ps1';'DESINSTALAR_JARBAS.cmd'='DESINSTALAR_JARBAS.ps1';'VERIFICAR_INTEGRIDADE.cmd'='VERIFICAR_INTEGRIDADE.ps1';'REPROCESSAR_PDFS.cmd'='REPROCESSAR_PDFS.ps1'}
   foreach($kv in $wrappers.GetEnumerator()){[IO.File]::WriteAllText((Join-Path $InstallDir $kv.Key),"@echo off`r`nchcp 65001 >nul`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0$($kv.Value)`"`r`n",[Text.ASCIIEncoding]::new())}
   Write-InstalledManifest
 
