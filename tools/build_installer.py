@@ -47,7 +47,7 @@ DOCS_NA_RAIZ_DO_PAYLOAD = [
     "MATRIZ_FUNCIONAL_7_0.md", "ARQUITETURA_SAAS_7_0.md",
     "ROADMAP_PRODUCAO.md", "CONSELHO_IA.md",
     "CAPACIDADE_2000_ASSINANTES.md",
-    "NOTAS_DA_VERSAO_9_0_2.txt", "README_INSTALACAO.md", "LEIA_PRIMEIRO.txt",
+    "NOTAS_DA_VERSAO_9_1_0.txt", "README_INSTALACAO.md", "LEIA_PRIMEIRO.txt",
 ]
 
 IGNORAR = shutil.ignore_patterns("__pycache__", "*.pyc", ".env", ".env.local",

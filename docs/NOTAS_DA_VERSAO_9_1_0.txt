@@ -1,3 +1,74 @@
+JARBAS Juridico Enterprise 9.1.0
+=================================
+
+O QUE MUDOU DESDE A 9.0.2
+
+SEGURANCA
+- Verificacao em duas etapas LIGADA ao login. Na 9.0.2 o motor TOTP existia,
+  tinha testes e nao era chamado por rota alguma: JARBAS_2FA_OBRIGATORIO=1
+  nao fazia nada, e quem lesse a documentacao acreditaria estar protegido sem
+  estar. Agora ha tela de ativacao, QR gerado no proprio servidor, codigos de
+  recuperacao de uso unico e exigencia por escritorio.
+- O DIAGNOSTICO_JARBAS deixou de imprimir a ANTHROPIC_API_KEY em claro. Ele
+  mascarava OPENAI_API_KEY, que a 9.0 nem usa, e o arquivo existe para ser
+  enviado ao suporte.
+- Bloqueio de forca bruta passa a identificar o cliente real atras de proxy
+  reverso (JARBAS_TRUSTED_PROXY_HOPS). Antes, oito senhas erradas de um
+  estranho trancariam o escritorio inteiro.
+
+LEITURA DE PDF
+- Um motor de leitura quebrado nao derruba mais a leitura inteira. As
+  bibliotecas de PDF carregam extensoes nativas, e uma extensao quebrada
+  levanta PanicException, que herda de BaseException e escapava de todo
+  `except Exception`. O efeito era o pior possivel: o motor de fallback so e
+  chamado em PDF DIGITALIZADO, justamente o caso dificil.
+- A nota de extracao passa a NOMEAR o motor indisponivel. Dependencia
+  quebrada em silencio fazia o operador procurar defeito no PDF, nao na
+  instalacao.
+
+OCR
+- INSTALAR_OCR.cmd instala o Tesseract sem exigir Administrador, e o idioma
+  PORTUGUES viaja dentro do pacote. O instalador oficial marca so o ingles, e
+  com ele o OCR de um auto brasileiro roda e devolve letra embaralhada.
+
+INTERFACE
+- Valores em R$ 25.000,00 e datas em 18/09/2026. Eram 65 valores e 25 datas em
+  formato americano; num sistema que mostra valor de causa, honorario e prazo
+  lado a lado, quem confere as pressas erra a casa decimal.
+- Painel com PRIMEIROS PASSOS no primeiro acesso, que some sozinho quando ha
+  dados. Antes eram oito indicadores zerados sem indicacao de por onde comecar.
+- Estados vazios passam a dizer o proximo ato e a levar ate ele.
+- Mensagens que mandavam "conectar a OpenAI" foram corrigidas: a 9.0 so aceita
+  chave da Anthropic, e a instrucao nao levava a lugar nenhum.
+
+IDENTIDADE DO PACOTE
+- Cada pacote carrega BUILD.txt com data, hora e commit. Dois pacotes diziam
+  "9.0.2" e nao havia como saber qual estava instalado - isso custou uma
+  rodada inteira de correcao, com a instalacao falhando por um defeito ja
+  corrigido no pacote que nao havia sido aplicado. O DIAGNOSTICO e o /health
+  mostram o build.
+
+INSTALACAO
+- As dependencias Python podem viajar dentro do pacote
+  (build_installer.py --com-dependencias): baixar do PyPI durante a instalacao
+  e o passo que mais falha na maquina do escritorio.
+- Backup do Windows deixou de copiar o SQLite com o servidor de pe, o que
+  produzia arquivo que o proprio SQLite recusa a abrir - falha que so aparece
+  no dia da restauracao. Agora usa a API de backup online e CONFERE a copia.
+- Backup diario agendado pela propria instalacao.
+
+TESTES: 386 (eram 284 na 9.0.2), iguais no pytest e no minipytest.
+
+ATENCAO AO ATUALIZAR
+Apague a pasta extraida da versao anterior antes de extrair esta. Extrair por
+cima ja falhou uma vez: os arquivos nao foram substituidos e a instalacao
+rodou o pacote antigo. O nome da pasta mudou para JARBAS_Instalador_9_1_0,
+o que torna a confusao menos provavel.
+
+-----------------------------------------------------------------------
+HISTORICO ANTERIOR
+-----------------------------------------------------------------------
+
 JARBAS Juridico Enterprise 8.5.0 — Conselho tri-IA
 ===================================================
 

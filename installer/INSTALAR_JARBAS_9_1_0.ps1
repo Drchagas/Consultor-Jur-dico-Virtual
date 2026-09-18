@@ -12,8 +12,8 @@ $RuntimeDir=Join-Path $InstallDir 'runtime'
 $DataDir=Join-Path $InstallDir 'data'
 $LogDir=Join-Path $InstallDir 'logs'
 $DownloadDir=Join-Path $InstallDir 'downloads'
-$InstallLog=Join-Path $LogDir 'instalacao-9.0.2.log'
-$BootstrapLog=Join-Path $LogDir 'bootstrap-admin-9.0.2.log'
+$InstallLog=Join-Path $LogDir 'instalacao-9.1.0.log'
+$BootstrapLog=Join-Path $LogDir 'bootstrap-admin-9.1.0.log'
 $AdminEmail='admin@chagasadvogados.local'
 $DeveloperEmail='developer@jarbas.local'
 
@@ -39,7 +39,7 @@ function Stop-AllJarbas {
   Start-Sleep -Seconds 2
 }
 function Backup-LegacyRoots([string[]]$Roots){
-  $base=Join-Path ([Environment]::GetFolderPath('MyDocuments')) ('JARBAS_Backups\pre-9.0.2-'+(Get-Date -Format 'yyyyMMdd-HHmmss'))
+  $base=Join-Path ([Environment]::GetFolderPath('MyDocuments')) ('JARBAS_Backups\pre-9.1.0-'+(Get-Date -Format 'yyyyMMdd-HHmmss'))
   New-Item -ItemType Directory -Force -Path $base|Out-Null
   foreach($r in $Roots){
     if(-not(Test-Path $r)){continue}
@@ -72,10 +72,10 @@ function Write-InstalledManifest {
 function Copy-CurrentBranding([string]$SourceRoot){if(-not $SourceRoot){return};$ws=Join-Path $SourceRoot 'app\static\workspaces';if(Test-Path $ws){Merge-Dir $ws (Join-Path $InstallDir 'app\static\workspaces')}}
 
 New-Item -ItemType Directory -Force -Path $InstallDir,$DataDir,$LogDir,$DownloadDir|Out-Null
-Set-Content -Path $InstallLog -Value 'JARBAS 9.0.2 - inicio' -Encoding UTF8
+Set-Content -Path $InstallLog -Value 'JARBAS 9.1.0 - inicio' -Encoding UTF8
 try{
   Say '========================================================================' DarkRed
-  Say ' JARBAS JURIDICO ENTERPRISE 9.0.2 - AUDITED BUILD' DarkRed
+  Say ' JARBAS JURIDICO ENTERPRISE 9.1.0 - AUDITED BUILD' DarkRed
   Say ' ERP Juridico + Copiloto + Intake PDF + Financeiro + Claude + SaaS' DarkRed
   Say '========================================================================' DarkRed
   Say ''
@@ -85,7 +85,7 @@ try{
   Say '[2/19] Encerrando instancias antigas do JARBAS...' Cyan;$legacyRoots=@(Get-CandidateRoots);Stop-AllJarbas
   Say '[3/19] Criando backup de todas as instalacoes encontradas...' Cyan;$BackupRoot=Backup-LegacyRoots $legacyRoots;Say "Backup: $BackupRoot" Green
 
-  Say '[4/19] Instalando nucleo 9.0.2 auditado sem apagar dados...' Cyan
+  Say '[4/19] Instalando nucleo 9.1.0 auditado sem apagar dados...' Cyan
   if(-not(Test-Path $Payload)){throw 'Pasta payload ausente no instalador.'}
   $preserve=Join-Path $env:TEMP ('jarbas-preserve-'+[guid]::NewGuid().ToString('N'));New-Item -ItemType Directory -Force -Path $preserve|Out-Null
   $currentWs=Join-Path $InstallDir 'app\static\workspaces';if(Test-Path $currentWs){Copy-Item $currentWs -Destination (Join-Path $preserve 'workspaces') -Recurse -Force}
@@ -93,7 +93,7 @@ try{
   Copy-Item (Join-Path $Payload 'app') -Destination $InstallDir -Recurse -Force;Copy-Item $ToolsSource -Destination $InstallDir -Recurse -Force;$TestsSource=Join-Path $SourceDir 'tests';if(Test-Path $TestsSource){Copy-Item $TestsSource -Destination $InstallDir -Recurse -Force}
   foreach($f in Get-ChildItem $ScriptsSource -Filter '*.ps1'){Copy-Item $f.FullName (Join-Path $InstallDir $f.Name) -Force}
   $ocrSrc=Join-Path $SourceDir 'ocr';if(Test-Path $ocrSrc){$ocrDst=Join-Path $InstallDir 'installer\ocr';New-Item -ItemType Directory -Force -Path $ocrDst|Out-Null;Copy-Item (Join-Path $ocrSrc '*') $ocrDst -Recurse -Force}
-  foreach($name in @('requirements.txt','requirements-ia.txt','VERSION.txt','BUILD.txt','LICENSE_PROPRIETARY.txt','README.md','AUDITORIA_8_3.md','AUDITORIA_8_3_1.md','SEGURANCA_LGPD_IA.md','MATRIZ_SISTEMA_PRINCIPAL.md','MATRIZ_FUNCIONAL_7_0.md','ARQUITETURA_SAAS_7_0.md','ROADMAP_PRODUCAO.md','CONSELHO_IA.md','CAPACIDADE_2000_ASSINANTES.md','NOTAS_DA_VERSAO_9_0_2.txt')){$src=Join-Path $Payload $name;if(Test-Path $src){Copy-Item $src -Destination $InstallDir -Force}}
+  foreach($name in @('requirements.txt','requirements-ia.txt','VERSION.txt','BUILD.txt','LICENSE_PROPRIETARY.txt','README.md','AUDITORIA_8_3.md','AUDITORIA_8_3_1.md','SEGURANCA_LGPD_IA.md','MATRIZ_SISTEMA_PRINCIPAL.md','MATRIZ_FUNCIONAL_7_0.md','ARQUITETURA_SAAS_7_0.md','ROADMAP_PRODUCAO.md','CONSELHO_IA.md','CAPACIDADE_2000_ASSINANTES.md','NOTAS_DA_VERSAO_9_1_0.txt')){$src=Join-Path $Payload $name;if(Test-Path $src){Copy-Item $src -Destination $InstallDir -Force}}
   if(Test-Path (Join-Path $preserve 'workspaces')){Merge-Dir (Join-Path $preserve 'workspaces') (Join-Path $InstallDir 'app\static\workspaces')}
 
   Say '[5/19] Preparando Python portatil 3.12...' Cyan
@@ -169,7 +169,7 @@ try{
   Remove-Item Env:JARBAS_BOOTSTRAP_DEVELOPER_PASSWORD -ErrorAction SilentlyContinue
   if($bootstrapRc -ne 0){Say 'Falha no bootstrap. Ultimas linhas:' Red;if(Test-Path $BootstrapLog){Get-Content $BootstrapLog -Tail 100 | Write-Host};throw "Falha ao inicializar/migrar banco e credenciais (codigo $bootstrapRc)."}
   $cred=@"
-JARBAS Juridico Enterprise 9.0.2
+JARBAS Juridico Enterprise 9.1.0
 
 Acesso: http://127.0.0.1:$Port/login
 Administrador: $AdminEmail
@@ -186,16 +186,16 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
   & $Python -c "import sys;sys.path.insert(0,r'$InstallDir');from app import main;main.init_db();print('PRODUCTION_RESTART_WITHOUT_PASSWORD_OK')";if($LASTEXITCODE -ne 0){throw 'O banco nao reinicializa em producao sem senha em texto.'}
 
   Say '[12/19] Executando self-test auditado de banco, Intake, rotas e modulos...' Cyan
-  $env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD=$AdminPassword;$selfOut=Join-Path $LogDir 'selftest-9.0.2-out.log';$selfErr=Join-Path $LogDir 'selftest-9.0.2-err.log';Remove-Item $selfOut,$selfErr -Force -ErrorAction SilentlyContinue;$proc=Start-Process -FilePath $Python -ArgumentList @((Join-Path $InstallDir 'tools\validate_install.py')) -WorkingDirectory $InstallDir -Wait -PassThru -NoNewWindow -RedirectStandardOutput $selfOut -RedirectStandardError $selfErr;$selfRc=$proc.ExitCode;Remove-Item Env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD -ErrorAction SilentlyContinue;if($selfRc -ne 0){Say 'Self-test falhou. Saida:' Red;if(Test-Path $selfOut){Get-Content $selfOut -Tail 80|Write-Host};if(Test-Path $selfErr){Get-Content $selfErr -Tail 80|Write-Host};throw 'Self-test integrado falhou. O sistema nao sera considerado instalado.'}else{if(Test-Path $selfOut){Get-Content $selfOut -Tail 40|Write-Host};if((Test-Path $selfErr) -and ((Get-Item $selfErr).Length -gt 0)){Log ('Self-test gerou avisos nao fatais: '+((Get-Content $selfErr -Tail 5)-join ' | '))}}
+  $env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD=$AdminPassword;$selfOut=Join-Path $LogDir 'selftest-9.1.0-out.log';$selfErr=Join-Path $LogDir 'selftest-9.1.0-err.log';Remove-Item $selfOut,$selfErr -Force -ErrorAction SilentlyContinue;$proc=Start-Process -FilePath $Python -ArgumentList @((Join-Path $InstallDir 'tools\validate_install.py')) -WorkingDirectory $InstallDir -Wait -PassThru -NoNewWindow -RedirectStandardOutput $selfOut -RedirectStandardError $selfErr;$selfRc=$proc.ExitCode;Remove-Item Env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD -ErrorAction SilentlyContinue;if($selfRc -ne 0){Say 'Self-test falhou. Saida:' Red;if(Test-Path $selfOut){Get-Content $selfOut -Tail 80|Write-Host};if(Test-Path $selfErr){Get-Content $selfErr -Tail 80|Write-Host};throw 'Self-test integrado falhou. O sistema nao sera considerado instalado.'}else{if(Test-Path $selfOut){Get-Content $selfOut -Tail 40|Write-Host};if((Test-Path $selfErr) -and ((Get-Item $selfErr).Length -gt 0)){Log ('Self-test gerou avisos nao fatais: '+((Get-Content $selfErr -Tail 5)-join ' | '))}}
 
-  Say '[13/19] Reprocessando INTEGRALMENTE PDFs existentes com o pipeline 9.0.2...' Cyan
+  Say '[13/19] Reprocessando INTEGRALMENTE PDFs existentes com o pipeline 9.1.0...' Cyan
   $env:JARBAS_ROOT=$InstallDir
-  $reindexOut=Join-Path $LogDir 'reindex-pdfs-9.0.2.log';$reindexErr=Join-Path $LogDir 'reindex-pdfs-9.0.2-errors.log'
+  $reindexOut=Join-Path $LogDir 'reindex-pdfs-9.1.0.log';$reindexErr=Join-Path $LogDir 'reindex-pdfs-9.1.0-errors.log'
   Remove-Item $reindexOut,$reindexErr -Force -ErrorAction SilentlyContinue
   $reindexProc=Start-Process -FilePath $Python -ArgumentList @((Join-Path $InstallDir 'tools\reindex_pdfs.py')) -WorkingDirectory $InstallDir -Wait -PassThru -NoNewWindow -RedirectStandardOutput $reindexOut -RedirectStandardError $reindexErr
   $reindexRc=$reindexProc.ExitCode
   if(Test-Path $reindexOut){Get-Content $reindexOut -Tail 160|Write-Host}
-  if($reindexRc -ne 0){Say 'Alguns PDFs tiveram falha real de reindexacao. O restante foi preservado; consulte os logs.' Yellow;if(Test-Path $reindexErr){Get-Content $reindexErr -Tail 80|Write-Host};Log "Reindexacao retornou codigo $reindexRc"}else{Say 'PDFs existentes reindexados pelo pipeline 9.0.2.' Green;if((Test-Path $reindexErr) -and ((Get-Item $reindexErr).Length -gt 0)){Log ('Reindexacao gerou avisos nao fatais: '+((Get-Content $reindexErr -Tail 5)-join ' | '))}}
+  if($reindexRc -ne 0){Say 'Alguns PDFs tiveram falha real de reindexacao. O restante foi preservado; consulte os logs.' Yellow;if(Test-Path $reindexErr){Get-Content $reindexErr -Tail 80|Write-Host};Log "Reindexacao retornou codigo $reindexRc"}else{Say 'PDFs existentes reindexados pelo pipeline 9.1.0.' Green;if((Test-Path $reindexErr) -and ((Get-Item $reindexErr).Length -gt 0)){Log ('Reindexacao gerou avisos nao fatais: '+((Get-Content $reindexErr -Tail 5)-join ' | '))}}
 
   Say '[14/19] Instalando ferramentas de manutencao e integridade...' Cyan
   foreach($f in Get-ChildItem $ScriptsSource -Filter '*.ps1'){Copy-Item $f.FullName (Join-Path $InstallDir $f.Name) -Force}
@@ -247,7 +247,7 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
   $env:JARBAS_PORT="$Port";$env:JARBAS_ADMIN_EMAIL=$AdminEmail;$env:JARBAS_LIVE_TEST_PASSWORD=$AdminPassword;& $Python (Join-Path $InstallDir 'tools\live_login_check.py');$liveRc=$LASTEXITCODE;Remove-Item Env:JARBAS_LIVE_TEST_PASSWORD -ErrorAction SilentlyContinue;if($liveRc -ne 0){throw 'O servidor abriu, mas o login administrativo real nao foi validado.'};Say 'Login administrativo validado no servidor real.' Green
 
   Say '[18/19] Criando atalhos profissionais...' Cyan
-  $desktop=[Environment]::GetFolderPath('Desktop');Get-ChildItem $desktop -Filter 'JARBAS*.lnk' -ErrorAction SilentlyContinue|Remove-Item -Force -ErrorAction SilentlyContinue;$ws=New-Object -ComObject WScript.Shell;$shortcut=$ws.CreateShortcut((Join-Path $desktop 'JARBAS Juridico 9.0.2.lnk'));$shortcut.TargetPath="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe";$shortcut.Arguments="-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $InstallDir 'INICIAR_JARBAS.ps1')`"";$shortcut.WorkingDirectory=$InstallDir;$shortcut.Description='JARBAS Juridico Enterprise 9.0.2';$shortcut.Save();$startDir=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\JARBAS Juridico';New-Item -ItemType Directory -Force -Path $startDir|Out-Null;Copy-Item (Join-Path $desktop 'JARBAS Juridico 9.0.2.lnk') (Join-Path $startDir 'JARBAS Juridico 9.0.2.lnk') -Force
+  $desktop=[Environment]::GetFolderPath('Desktop');Get-ChildItem $desktop -Filter 'JARBAS*.lnk' -ErrorAction SilentlyContinue|Remove-Item -Force -ErrorAction SilentlyContinue;$ws=New-Object -ComObject WScript.Shell;$shortcut=$ws.CreateShortcut((Join-Path $desktop 'JARBAS Juridico 9.1.0.lnk'));$shortcut.TargetPath="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe";$shortcut.Arguments="-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $InstallDir 'INICIAR_JARBAS.ps1')`"";$shortcut.WorkingDirectory=$InstallDir;$shortcut.Description='JARBAS Juridico Enterprise 9.1.0';$shortcut.Save();$startDir=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\JARBAS Juridico';New-Item -ItemType Directory -Force -Path $startDir|Out-Null;Copy-Item (Join-Path $desktop 'JARBAS Juridico 9.1.0.lnk') (Join-Path $startDir 'JARBAS Juridico 9.1.0.lnk') -Force
 
   Say '[19/19] Instalando OCR, agendando backup e registrando instalacao...' Cyan
   # OCR em etapa TOLERANTE A FALHA, como o SDK de IA: um escritorio nao pode
@@ -280,8 +280,8 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
     Log ('Agendamento de backup falhou: '+$_.Exception.Message)
   }
 
-  [IO.File]::WriteAllText((Join-Path $InstallDir 'INSTALACAO_OK_9_0_2.txt'),"JARBAS 9.0.2 instalado em $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`r`n",[Text.UTF8Encoding]::new($false));Log 'INSTALACAO CONCLUIDA COM SUCESSO';Remove-Item Env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD -ErrorAction SilentlyContinue
-  Say '';Say 'JARBAS JURIDICO ENTERPRISE 9.0.2 INSTALADO, TESTADO E INICIADO.' Green;Say "Acesso: http://127.0.0.1:$Port/login" Green;Say "Administrador: $AdminEmail" Green;Say 'A senha do administrador e a senha definida durante a instalacao.' Yellow;Say '' ;Say 'RECOMENDADO para quem opera com autos reais:' Cyan;Say '  1. Ative a verificacao em duas etapas em Configuracoes > Seguranca.' Cyan;Say '     Para exigi-la de todos, ponha JARBAS_2FA_OBRIGATORIO=1 no .env.local.' Cyan;Say '  2. Confira em Documentos\JARBAS_Backups se as copias estao saindo.' Cyan;Say '  3. Teste UMA restauracao por semestre: backup nunca restaurado nao e backup.' Cyan;Say "Credencial de desenvolvedor: $(Join-Path $InstallDir 'CREDENCIAL_DESENVOLVEDOR.txt')" Yellow;Start-Process notepad.exe (Join-Path $InstallDir 'CREDENCIAIS_INICIAIS.txt');exit 0
+  [IO.File]::WriteAllText((Join-Path $InstallDir 'INSTALACAO_OK_9_1_0.txt'),"JARBAS 9.1.0 instalado em $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`r`n",[Text.UTF8Encoding]::new($false));Log 'INSTALACAO CONCLUIDA COM SUCESSO';Remove-Item Env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+  Say '';Say 'JARBAS JURIDICO ENTERPRISE 9.1.0 INSTALADO, TESTADO E INICIADO.' Green;Say "Acesso: http://127.0.0.1:$Port/login" Green;Say "Administrador: $AdminEmail" Green;Say 'A senha do administrador e a senha definida durante a instalacao.' Yellow;Say '' ;Say 'RECOMENDADO para quem opera com autos reais:' Cyan;Say '  1. Ative a verificacao em duas etapas em Configuracoes > Seguranca.' Cyan;Say '     Para exigi-la de todos, ponha JARBAS_2FA_OBRIGATORIO=1 no .env.local.' Cyan;Say '  2. Confira em Documentos\JARBAS_Backups se as copias estao saindo.' Cyan;Say '  3. Teste UMA restauracao por semestre: backup nunca restaurado nao e backup.' Cyan;Say "Credencial de desenvolvedor: $(Join-Path $InstallDir 'CREDENCIAL_DESENVOLVEDOR.txt')" Yellow;Start-Process notepad.exe (Join-Path $InstallDir 'CREDENCIAIS_INICIAIS.txt');exit 0
 }catch{
   $msg=$_.Exception.Message;Log "ERRO: $msg";Say '';Say "ERRO NA INSTALACAO: $msg" Red;Say "Log: $InstallLog" Yellow;try{if(Test-Path (Join-Path $InstallDir 'DIAGNOSTICO_JARBAS.ps1')){& (Join-Path $InstallDir 'DIAGNOSTICO_JARBAS.ps1')}}catch{};Say 'O backup dos dados anteriores foi preservado. Nao apague manualmente pastas ou bancos.' Yellow;exit 82
 }
