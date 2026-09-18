@@ -62,7 +62,11 @@ function Write-InstalledManifest {
   $targets=New-Object System.Collections.Generic.List[string]
   foreach($p in Get-ChildItem (Join-Path $InstallDir 'app') -Recurse -File){$targets.Add($p.FullName)}
   foreach($p in Get-ChildItem (Join-Path $InstallDir 'tools') -Recurse -File){$targets.Add($p.FullName)}
-  foreach($name in @('requirements.txt','VERSION.txt','INICIAR_JARBAS.ps1','PARAR_JARBAS.ps1','CONFIGURAR_IA.ps1','RESETAR_SENHA.ps1','BACKUP_JARBAS.ps1','DIAGNOSTICO_JARBAS.ps1','DESINSTALAR_JARBAS.ps1','VERIFICAR_INTEGRIDADE.ps1','REPROCESSAR_PDFS.ps1')){$p=Join-Path $InstallDir $name;if(Test-Path $p){$targets.Add($p)}}
+  # Enumerar em vez de listar: a lista fixa deixava de fora todo script novo,
+  # que passava a nao ser conferido por VERIFICAR_INTEGRIDADE — exatamente o
+  # arquivo recem-chegado, que e o mais provavel de vir adulterado ou truncado.
+  foreach($p in Get-ChildItem $InstallDir -Filter '*.ps1' -File){$targets.Add($p.FullName)}
+  foreach($name in @('requirements.txt','requirements-ia.txt','VERSION.txt')){$p=Join-Path $InstallDir $name;if(Test-Path $p){$targets.Add($p)}}
   $out=New-Object System.Collections.Generic.List[string];foreach($p in $targets){$rel=$p.Substring($InstallDir.Length).TrimStart('\');$hash=(Get-FileHash -Algorithm SHA256 $p).Hash.ToLower();$out.Add("$hash $rel")};[IO.File]::WriteAllLines((Join-Path $InstallDir 'PAYLOAD_MANIFEST_SHA256.txt'),$out,[Text.ASCIIEncoding]::new())
 }
 function Copy-CurrentBranding([string]$SourceRoot){if(-not $SourceRoot){return};$ws=Join-Path $SourceRoot 'app\static\workspaces';if(Test-Path $ws){Merge-Dir $ws (Join-Path $InstallDir 'app\static\workspaces')}}
@@ -72,7 +76,7 @@ Set-Content -Path $InstallLog -Value 'JARBAS 9.0.2 - inicio' -Encoding UTF8
 try{
   Say '========================================================================' DarkRed
   Say ' JARBAS JURIDICO ENTERPRISE 9.0.2 - AUDITED BUILD' DarkRed
-  Say ' ERP Juridico + Copiloto + Intake PDF + Financeiro + OpenAI + SaaS' DarkRed
+  Say ' ERP Juridico + Copiloto + Intake PDF + Financeiro + Claude + SaaS' DarkRed
   Say '========================================================================' DarkRed
   Say ''
   if(-not [Environment]::Is64BitOperatingSystem){throw 'Esta distribuicao requer Windows 64 bits.'}
@@ -129,14 +133,14 @@ try{
     if($selResolved -ne $insResolved){if(Test-Path $DataDir){Remove-Item $DataDir -Recurse -Force};New-Item -ItemType Directory -Force -Path $DataDir|Out-Null;Merge-Dir (Join-Path $SelectedRoot 'data') $DataDir;Copy-CurrentBranding $SelectedRoot;$canonicalDb=Join-Path $DataDir 'jarbas.db';if(Test-Path $BestDb){Copy-Item $BestDb $canonicalDb -Force};& $Python (Join-Path $InstallDir 'tools\rebase_paths.py') $canonicalDb $SelectedRoot $InstallDir|Out-Null}
   }
 
-  Say '[9/19] Criando configuracao segura e preservando OpenAI...' Cyan
+  Say '[9/19] Criando configuracao segura e preservando a chave do Claude...' Cyan
   $OldEnv='';if(Test-Path (Join-Path $InstallDir '.env.local')){$OldEnv=Join-Path $InstallDir '.env.local'}elseif($SelectedRoot -and (Test-Path (Join-Path $SelectedRoot '.env.local'))){$OldEnv=Join-Path $SelectedRoot '.env.local'}
   $AnthropicKey=EnvValue $OldEnv 'ANTHROPIC_API_KEY';$LegalModel=EnvValue $OldEnv 'JARBAS_AI_MODEL_LEGAL';$IntakeModel=EnvValue $OldEnv 'JARBAS_AI_MODEL_INTAKE';$RoutineModel=EnvValue $OldEnv 'JARBAS_AI_MODEL_ROUTINE';# Migracao da 8.x: o .env.local antigo traz modelos da OpenAI. Preservar
   # esses nomes faz o gateway enviar 'gpt-5.6-sol' para a Anthropic.
   if($LegalModel -notlike 'claude-*'){$LegalModel='claude-opus-5'}
   if($IntakeModel -notlike 'claude-*'){$IntakeModel='claude-sonnet-5'}
   if($RoutineModel -notlike 'claude-*'){$RoutineModel='claude-haiku-4-5-20251001'}
-  $Port=Find-FreePort;$Secret=Token 72;$EnvFile=Join-Path $InstallDir '.env.local';$envLines=@('JARBAS_ENV=production',"JARBAS_SECRET_KEY=$Secret","JARBAS_ADMIN_EMAIL=$AdminEmail",'JARBAS_ALLOWED_HOSTS=localhost,127.0.0.1','JARBAS_HTTPS_ONLY=0','JARBAS_PUBLIC_SIGNUP=0','JARBAS_ALLOW_INDEXING=0','JARBAS_ALLOW_SECRET_CONFIG=1','JARBAS_MAX_UPLOAD_MB=300','JARBAS_AI_MAX_PDF_FILES=10','JARBAS_AI_MAX_PDF_MB=200','JARBAS_AI_TIMEOUT=240','JARBAS_AI_PDF_ALWAYS=1','JARBAS_AI_TETO_USD_MES=50','JARBAS_PAPEL_EXTRACAO=anthropic:claude-sonnet-5','JARBAS_PAPEL_ESTRATEGIA=anthropic:claude-opus-5','JARBAS_PAPEL_REDACAO=anthropic:claude-opus-5','JARBAS_PAPEL_CRITICA=anthropic:claude-sonnet-5','JARBAS_PAPEL_ROTINA=anthropic:claude-haiku-4-5-20251001',"JARBAS_AI_MODEL_LEGAL=$LegalModel","JARBAS_AI_MODEL_INTAKE=$IntakeModel","JARBAS_AI_MODEL_ROUTINE=$RoutineModel","JARBAS_PORT=$Port");if($AnthropicKey){$envLines += "ANTHROPIC_API_KEY=$AnthropicKey"};Say 'Chaves de OpenAI/Gemini, se existiam, nao foram copiadas: revogue-as nos paineis.' DarkGray;[IO.File]::WriteAllLines($EnvFile,$envLines,[Text.UTF8Encoding]::new($false));[IO.File]::WriteAllText((Join-Path $InstallDir 'PORTA_LOCAL.txt'),"$Port`r`n",[Text.ASCIIEncoding]::new())
+  $Port=Find-FreePort;$Secret=Token 72;$EnvFile=Join-Path $InstallDir '.env.local';$envLines=@('JARBAS_ENV=production',"JARBAS_SECRET_KEY=$Secret","JARBAS_ADMIN_EMAIL=$AdminEmail",'JARBAS_ALLOWED_HOSTS=localhost,127.0.0.1','JARBAS_HTTPS_ONLY=0','JARBAS_PUBLIC_SIGNUP=0','JARBAS_2FA_OBRIGATORIO=0','JARBAS_SESSION_MAX_AGE=28800','JARBAS_TRUSTED_PROXY_HOPS=0','JARBAS_ALLOW_INDEXING=0','JARBAS_ALLOW_SECRET_CONFIG=1','JARBAS_MAX_UPLOAD_MB=300','JARBAS_AI_MAX_PDF_FILES=10','JARBAS_AI_MAX_PDF_MB=200','JARBAS_AI_TIMEOUT=240','JARBAS_AI_PDF_ALWAYS=1','JARBAS_AI_TETO_USD_MES=50','JARBAS_PAPEL_EXTRACAO=anthropic:claude-sonnet-5','JARBAS_PAPEL_ESTRATEGIA=anthropic:claude-opus-5','JARBAS_PAPEL_REDACAO=anthropic:claude-opus-5','JARBAS_PAPEL_CRITICA=anthropic:claude-sonnet-5','JARBAS_PAPEL_ROTINA=anthropic:claude-haiku-4-5-20251001',"JARBAS_AI_MODEL_LEGAL=$LegalModel","JARBAS_AI_MODEL_INTAKE=$IntakeModel","JARBAS_AI_MODEL_ROUTINE=$RoutineModel","JARBAS_PORT=$Port");if($AnthropicKey){$envLines += "ANTHROPIC_API_KEY=$AnthropicKey"};Say 'Chaves de OpenAI/Gemini, se existiam, nao foram copiadas: revogue-as nos paineis.' DarkGray;[IO.File]::WriteAllLines($EnvFile,$envLines,[Text.UTF8Encoding]::new($false));[IO.File]::WriteAllText((Join-Path $InstallDir 'PORTA_LOCAL.txt'),"$Port`r`n",[Text.ASCIIEncoding]::new())
 
   Say '[10/19] Definindo credenciais e migrando banco...' Cyan
   $AdminPassword=Read-NewAdminPassword;$DeveloperPassword='Dev83-'+(Token 30);$env:JARBAS_ROOT=$InstallDir;$env:JARBAS_ADMIN_EMAIL=$AdminEmail;$env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD=$AdminPassword;$env:JARBAS_DEVELOPER_EMAIL=$DeveloperEmail;$env:JARBAS_BOOTSTRAP_DEVELOPER_PASSWORD=$DeveloperPassword
@@ -174,11 +178,11 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
 
   Say '[14/19] Instalando ferramentas de manutencao e integridade...' Cyan
   foreach($f in Get-ChildItem $ScriptsSource -Filter '*.ps1'){Copy-Item $f.FullName (Join-Path $InstallDir $f.Name) -Force}
-  $wrappers=@{'INICIAR_JARBAS.cmd'='INICIAR_JARBAS.ps1';'PARAR_JARBAS.cmd'='PARAR_JARBAS.ps1';'DIAGNOSTICO_JARBAS.cmd'='DIAGNOSTICO_JARBAS.ps1';'CONFIGURAR_OPENAI.cmd'='CONFIGURAR_IA.ps1';'RESETAR_SENHA.cmd'='RESETAR_SENHA.ps1';'BACKUP_JARBAS.cmd'='BACKUP_JARBAS.ps1';'DESINSTALAR_JARBAS.cmd'='DESINSTALAR_JARBAS.ps1';'VERIFICAR_INTEGRIDADE.cmd'='VERIFICAR_INTEGRIDADE.ps1';'REPROCESSAR_PDFS.cmd'='REPROCESSAR_PDFS.ps1'}
+  $wrappers=@{'INICIAR_JARBAS.cmd'='INICIAR_JARBAS.ps1';'PARAR_JARBAS.cmd'='PARAR_JARBAS.ps1';'DIAGNOSTICO_JARBAS.cmd'='DIAGNOSTICO_JARBAS.ps1';'CONFIGURAR_OPENAI.cmd'='CONFIGURAR_IA.ps1';'RESETAR_SENHA.cmd'='RESETAR_SENHA.ps1';'BACKUP_JARBAS.cmd'='BACKUP_JARBAS.ps1';'BACKUP_AUTOMATICO.cmd'='BACKUP_AUTOMATICO.ps1';'DESINSTALAR_JARBAS.cmd'='DESINSTALAR_JARBAS.ps1';'VERIFICAR_INTEGRIDADE.cmd'='VERIFICAR_INTEGRIDADE.ps1';'REPROCESSAR_PDFS.cmd'='REPROCESSAR_PDFS.ps1'}
   foreach($kv in $wrappers.GetEnumerator()){[IO.File]::WriteAllText((Join-Path $InstallDir $kv.Key),"@echo off`r`nchcp 65001 >nul`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0$($kv.Value)`"`r`n",[Text.ASCIIEncoding]::new())}
   Write-InstalledManifest
 
-  Say '[15/19] Configuracao facilitada da OpenAI API...' Cyan
+  Say '[15/19] Configuracao facilitada do Claude (Anthropic)...' Cyan
   if($AnthropicKey){Say 'Chave Claude existente foi preservada.' Green}else{
     Say '' ; Say 'Claude e o provedor de IA do JARBAS.' Cyan
     Say 'Gere a chave em console.anthropic.com.' DarkGray
@@ -195,10 +199,24 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
     }
   }
   if($AnthropicKey){Say 'IA ativa: Claude (provedor unico).' Green}else{Say 'Nenhuma IA configurada. O JARBAS roda em modo local.' Yellow}
-  $ativas=@();if($OpenAIKey){$ativas+='OpenAI'};if($AnthropicKey){$ativas+='Anthropic'};if($GeminiKey){$ativas+='Gemini'}
-  if($ativas.Count -ge 2){Say ("Conselho tri-IA ativo com: "+($ativas -join ', ')+". Critica independente HABILITADA.") Green}
-  elseif($ativas.Count -eq 1){Say ("Apenas "+$ativas[0]+" configurado. Critica adversarial DESLIGADA — configure uma segunda chave em /conselho.") Yellow}
-  else{Say 'Nenhuma IA configurada. O JARBAS roda em modo local.' Yellow}
+  # Este bloco vinha da 8.5, quando o Conselho era tri-IA. $OpenAIKey e
+  # $GeminiKey NAO EXISTEM mais no instalador 9.0 — sao sempre nulos — de modo
+  # que a mensagem impressa era invariavelmente 'Critica adversarial DESLIGADA
+  # — configure uma segunda chave em /conselho'. Instrucao sem destino: a 9.0
+  # tem a Anthropic como provedor unico e nao aceita chave de outro provedor.
+  # Pior, contradizia a linha logo acima, que anuncia 'provedor unico'.
+  #
+  # O que a 9.0 realmente faz (app/ai_council.py): a critica RODA, entre
+  # modelos Claude distintos, e o proprio sistema registra que modelos de
+  # mesma linhagem compartilham pontos cegos. E isso que o operador precisa
+  # ouvir — porque muda o que ele tem de conferir a mao.
+  if($AnthropicKey){
+    Say 'Conselho ativo: redacao e critica em modelos Claude distintos.' Green
+    Say 'Modelos de mesma linhagem compartilham pontos cegos: confira cada' Yellow
+    Say 'fundamento e cada jurisprudencia manualmente antes de protocolar.' Yellow
+  }else{
+    Say 'Nenhuma IA configurada. O JARBAS roda em modo local.' Yellow
+  }
 
   Say '[16/19] Iniciando servidor e verificando health-check...' Cyan
   & (Join-Path $InstallDir 'INICIAR_JARBAS.ps1');if($LASTEXITCODE -ne 0){throw "Servidor nao iniciou. Codigo $LASTEXITCODE"}
@@ -210,9 +228,23 @@ A conta de desenvolvedor e exclusiva desta instalacao local. Nao existe senha me
   Say '[18/19] Criando atalhos profissionais...' Cyan
   $desktop=[Environment]::GetFolderPath('Desktop');Get-ChildItem $desktop -Filter 'JARBAS*.lnk' -ErrorAction SilentlyContinue|Remove-Item -Force -ErrorAction SilentlyContinue;$ws=New-Object -ComObject WScript.Shell;$shortcut=$ws.CreateShortcut((Join-Path $desktop 'JARBAS Juridico 9.0.2.lnk'));$shortcut.TargetPath="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe";$shortcut.Arguments="-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $InstallDir 'INICIAR_JARBAS.ps1')`"";$shortcut.WorkingDirectory=$InstallDir;$shortcut.Description='JARBAS Juridico Enterprise 9.0.2';$shortcut.Save();$startDir=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\JARBAS Juridico';New-Item -ItemType Directory -Force -Path $startDir|Out-Null;Copy-Item (Join-Path $desktop 'JARBAS Juridico 9.0.2.lnk') (Join-Path $startDir 'JARBAS Juridico 9.0.2.lnk') -Force
 
-  Say '[19/19] Concluindo e registrando instalacao...' Cyan
+  Say '[19/19] Agendando backup diario e registrando instalacao...' Cyan
+  # Backup manual e backup que nao acontece: depende de alguem lembrar no dia
+  # em que o escritorio esta corrido — que e o dia em que a maquina falha.
+  try{
+    $agendar=Join-Path $InstallDir 'BACKUP_AUTOMATICO.ps1'
+    if(Test-Path $agendar){
+      & $agendar -Hora '12:10'
+      Say 'Backup diario agendado (12:10). Cancele com BACKUP_AUTOMATICO.ps1 -Remover.' Green
+    }
+  }catch{
+    Say 'Nao foi possivel agendar o backup automatico (requer Administrador).' Yellow
+    Say 'Rode BACKUP_AUTOMATICO.ps1 como Administrador depois. Ate la, use BACKUP_JARBAS.cmd.' Yellow
+    Log ('Agendamento de backup falhou: '+$_.Exception.Message)
+  }
+
   [IO.File]::WriteAllText((Join-Path $InstallDir 'INSTALACAO_OK_9_0_2.txt'),"JARBAS 9.0.2 instalado em $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`r`n",[Text.UTF8Encoding]::new($false));Log 'INSTALACAO CONCLUIDA COM SUCESSO';Remove-Item Env:JARBAS_BOOTSTRAP_ADMIN_PASSWORD -ErrorAction SilentlyContinue
-  Say '';Say 'JARBAS JURIDICO ENTERPRISE 9.0.2 INSTALADO, TESTADO E INICIADO.' Green;Say "Acesso: http://127.0.0.1:$Port/login" Green;Say "Administrador: $AdminEmail" Green;Say 'A senha do administrador e a senha definida durante a instalacao.' Yellow;Say "Credencial de desenvolvedor: $(Join-Path $InstallDir 'CREDENCIAL_DESENVOLVEDOR.txt')" Yellow;Start-Process notepad.exe (Join-Path $InstallDir 'CREDENCIAIS_INICIAIS.txt');exit 0
+  Say '';Say 'JARBAS JURIDICO ENTERPRISE 9.0.2 INSTALADO, TESTADO E INICIADO.' Green;Say "Acesso: http://127.0.0.1:$Port/login" Green;Say "Administrador: $AdminEmail" Green;Say 'A senha do administrador e a senha definida durante a instalacao.' Yellow;Say '' ;Say 'RECOMENDADO para quem opera com autos reais:' Cyan;Say '  1. Ative a verificacao em duas etapas em Configuracoes > Seguranca.' Cyan;Say '     Para exigi-la de todos, ponha JARBAS_2FA_OBRIGATORIO=1 no .env.local.' Cyan;Say '  2. Confira em Documentos\JARBAS_Backups se as copias estao saindo.' Cyan;Say '  3. Teste UMA restauracao por semestre: backup nunca restaurado nao e backup.' Cyan;Say "Credencial de desenvolvedor: $(Join-Path $InstallDir 'CREDENCIAL_DESENVOLVEDOR.txt')" Yellow;Start-Process notepad.exe (Join-Path $InstallDir 'CREDENCIAIS_INICIAIS.txt');exit 0
 }catch{
   $msg=$_.Exception.Message;Log "ERRO: $msg";Say '';Say "ERRO NA INSTALACAO: $msg" Red;Say "Log: $InstallLog" Yellow;try{if(Test-Path (Join-Path $InstallDir 'DIAGNOSTICO_JARBAS.ps1')){& (Join-Path $InstallDir 'DIAGNOSTICO_JARBAS.ps1')}}catch{};Say 'O backup dos dados anteriores foi preservado. Nao apague manualmente pastas ou bancos.' Yellow;exit 82
 }
