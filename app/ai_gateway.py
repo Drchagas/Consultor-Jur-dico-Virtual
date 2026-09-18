@@ -70,8 +70,76 @@ class AIConnectionStatus:
     message: str
 
 
+# Caracteres que o navegador, o Word e o PowerShell inserem sem aparecer na
+# tela: BOM, espaços de largura zero e espaço não separável. Colar uma chave
+# de uma página web costuma trazer pelo menos um deles junto.
+_INVISIVEIS = "\ufeff\u200b\u200c\u200d\u2060\u00a0"
+
+# O que foi removido da chave guardada, para o diagnóstico poder dizer ao
+# operador que o .env.local precisa ser corrigido — em vez de o sistema
+# funcionar por acidente e voltar a quebrar na próxima instalação.
+_CHAVE_SANEADA: list[str] = []
+
+
+def _limpar_chave(bruta: str) -> str:
+    """Tira da chave o que nunca faz parte dela.
+
+    Existe por causa de um caso real: o erro na tela dizia ao mesmo tempo
+    "Chave recusada (401)" e "não reconheci o formato desta chave". As duas
+    coisas juntas só acontecem quando o que está guardado NÃO é a chave pura
+    — tem aspas, espaço invisível, ou veio a linha inteira do arquivo colada
+    no campo. O servidor recusa porque recebe lixo junto; a checagem local
+    não reconhece o prefixo pelo mesmo motivo.
+
+    Três origens, todas comuns:
+
+    - `ANTHROPIC_API_KEY="sk-ant-..."` no .env.local. O python-dotenv tira as
+      aspas, mas o INICIAR_JARBAS.ps1 lê o arquivo por conta própria, faz
+      Split('=') e exporta o valor COM as aspas. Como o load_dotenv roda com
+      override=False, ele não corrige o que o PowerShell já exportou.
+    - A linha inteira colada no campo da chave, virando
+      `ANTHROPIC_API_KEY=ANTHROPIC_API_KEY=sk-ant-...`.
+    - Caractere invisível vindo do copiar-e-colar da página do console.
+
+    Sanear aqui conserta os três de uma vez, em qualquer caminho de entrada.
+    """
+    k = bruta or ""
+    for c in _INVISIVEIS:
+        if c in k:
+            k = k.replace(c, "")
+            _registrar_saneamento("caractere invisível")
+    if k != k.strip():
+        _registrar_saneamento("espaço em volta")
+        k = k.strip()
+
+    # Linha inteira colada no campo: fica ANTHROPIC_API_KEY=<chave>.
+    if "=" in k:
+        nome, _, valor = k.partition("=")
+        if nome.strip().strip("\"'").upper() == ENV_CHAVE:
+            _registrar_saneamento("nome da variável colado junto")
+            k = valor.strip()
+
+    # Aspas em volta, do .env.local ou do copiar-e-colar.
+    if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'":
+        _registrar_saneamento("aspas em volta")
+        k = k[1:-1].strip()
+    return k
+
+
+def _registrar_saneamento(motivo: str) -> None:
+    if motivo not in _CHAVE_SANEADA:
+        _CHAVE_SANEADA.append(motivo)
+
+
+def chave_saneada() -> list[str]:
+    """O que foi removido da chave na última leitura. Vazio = chave limpa."""
+    _key()
+    return list(_CHAVE_SANEADA)
+
+
 def _key() -> str:
-    return os.getenv(ENV_CHAVE, "").strip()
+    _CHAVE_SANEADA.clear()
+    return _limpar_chave(os.getenv(ENV_CHAVE, ""))
 
 
 def configured() -> bool:
@@ -226,11 +294,29 @@ def friendly_error(exc: Exception) -> str:
     status = getattr(exc, "status_code", None)
     if status == 401 or "Authentication" in nome:
         tipo, diagnostico = formato_chave()
-        if tipo != "anthropic":
-            return f"Chave recusada (401). {diagnostico}"
-        return ("Chave da Anthropic recusada (401). O formato esta certo, entao "
-                "ela foi revogada, expirou ou pertence a outra organizacao. "
-                "Confira em console.anthropic.com > API Keys.")
+        sujeira = chave_saneada()
+        if sujeira:
+            # A chave guardada tinha lixo que o JARBAS removeu na leitura, e
+            # ainda assim o servidor recusou. O arquivo continua errado, e a
+            # próxima instalação vai repetir o problema: mande consertar a
+            # origem, não só tentar de novo.
+            return ("Chave recusada (401). O valor guardado esta com "
+                    + ", ".join(sujeira) + ". Regrave a chave com "
+                    "CONFIGURAR_IA.cmd (ou em Configuracoes), colando APENAS "
+                    "a chave — sem aspas e sem o nome da variavel.")
+        if tipo == "anthropic":
+            return ("Chave da Anthropic recusada (401). O formato esta certo, entao "
+                    "ela foi revogada, expirou, pertence a outra organizacao ou a "
+                    "conta esta sem credito. Confira em console.anthropic.com > "
+                    "API Keys e em Billing.")
+        # Formato não reconhecido E recusa do servidor dizem a MESMA coisa: o
+        # que está guardado não é uma chave da Anthropic. Antes a mensagem
+        # emendava os dois diagnósticos ("Chave recusada (401). Nao reconheci
+        # o formato...") e parecia contradição — o operador lia "o servidor
+        # recusou" e "nem cheguei a mandar" na mesma frase, sem saber o que
+        # fazer.
+        return (diagnostico + " Rode DIAGNOSTICAR_IA.cmd para ver o que esta "
+                "guardado sem expor a chave.")
     if status == 429 or "RateLimit" in nome:
         return "Limite de uso atingido. Verifique os creditos da conta Anthropic."
     if status == 403 or "PermissionDenied" in nome:

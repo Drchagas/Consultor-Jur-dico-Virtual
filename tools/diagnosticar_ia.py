@@ -18,6 +18,25 @@ sys.path.insert(0, str(ROOT))
 OK, FALHA, AVISO = "  [OK]   ", "  [FALHA]", "  [aviso]"
 
 
+def _origem(root: Path) -> str:
+    """De onde veio a chave: do .env.local ou do ambiente do processo.
+
+    Importa porque uma variavel exportada na sessao do Windows vence o
+    .env.local — o operador corrige o arquivo, nada muda, e nao ha como
+    adivinhar por que.
+    """
+    arquivo = root / ".env.local"
+    if not arquivo.is_file():
+        return "ambiente do processo (.env.local nao existe)"
+    try:
+        for linha in arquivo.read_text(encoding="utf-8", errors="replace").splitlines():
+            if linha.strip().startswith("ANTHROPIC_API_KEY"):
+                return f"{arquivo}"
+    except OSError:
+        pass
+    return "ambiente do processo (.env.local nao tem a variavel)"
+
+
 def main() -> int:
     testar = "--testar" in sys.argv
     try:
@@ -35,16 +54,38 @@ def main() -> int:
     # 1 -------------------------------------------------- chave
     print("[1/4] Chave de API")
     tipo, diagnostico = G.formato_chave()
-    chave = os.getenv(G.ENV_CHAVE, "").strip()
+    bruta = os.getenv(G.ENV_CHAVE, "")
+    limpa = G._key()
+    sujeira = G.chave_saneada()
+
     print(f"        variavel: {G.ENV_CHAVE}")
-    print(f"        valor...: {('*'*4 + chave[-4:]) if len(chave) >= 4 else '(vazio)'}")
-    print(f"        tamanho.: {len(chave)} caracteres")
+    print(f"        origem..: {_origem(ROOT)}")
+    if not limpa:
+        print("        valor...: (vazio)")
+    else:
+        # O prefixo 'sk-ant-' e publico e e justamente o que distingue uma
+        # chave boa de uma chave da OpenAI, de uma linha inteira colada ou de
+        # um valor entre aspas. Sem mostra-lo, o diagnostico esconde a unica
+        # informacao que resolve o caso. O miolo continua oculto.
+        print(f"        comeca..: {limpa[:7]!r}")
+        print(f"        termina.: ...{limpa[-4:]}")
+        print(f"        tamanho.: {len(limpa)} caracteres"
+              + (f" (eram {len(bruta)} antes da limpeza)" if len(bruta) != len(limpa) else ""))
+
+    if sujeira:
+        print(f"{AVISO} o valor guardado esta com: {', '.join(sujeira)}.")
+        print("        O JARBAS removeu isso para conseguir usar a chave, mas o")
+        print("        arquivo continua errado e a proxima instalacao vai repetir")
+        print("        o problema. Regrave com CONFIGURAR_IA.cmd, colando APENAS")
+        print("        a chave — sem aspas e sem o nome da variavel.")
+
     print(f"{OK if tipo == 'anthropic' else FALHA} {diagnostico}")
     if tipo != "anthropic":
         print("\n        Como resolver:")
         print("        1. Acesse console.anthropic.com > API Keys")
         print("        2. Crie uma chave (comeca com 'sk-ant-')")
-        print("        3. Rode CONFIGURAR_IA.cmd, ou informe em /settings")
+        print("        3. Rode CONFIGURAR_IA.cmd e cole SO a chave")
+        print("        4. Rode este diagnostico de novo")
         return 1
 
     # 2 -------------------------------------------------- SDK

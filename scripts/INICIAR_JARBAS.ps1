@@ -8,7 +8,31 @@ $RunScript=Join-Path $Root 'tools\run_server.py'
 $LogDir=Join-Path $Root 'logs'
 $PidFile=Join-Path $Root 'JARBAS.pid'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-function Load-Env {if(-not(Test-Path $EnvFile)){throw 'Arquivo .env.local nao encontrado.'};Get-Content $EnvFile | ForEach-Object {$line=$_.Trim();if($line -and -not $line.StartsWith('#') -and $line.Contains('=')){$parts=$line.Split('=',2);[Environment]::SetEnvironmentVariable($parts[0],$parts[1],'Process')}}}
+# ATENCAO: este leitor de .env.local precisa tirar aspas do valor.
+#
+# O app usa load_dotenv(..., override=False) — ou seja, o que ESTE script
+# exportar vence o arquivo. Se o .env.local tiver
+#     ANTHROPIC_API_KEY="sk-ant-..."
+# e exportarmos o valor COM as aspas, o Python nao tem como corrigir: ele ve
+# uma chave que comeca com aspas, manda as aspas para a API e recebe 401.
+# A tela do Intake entao exibia, na mesma frase, "Chave recusada (401)" e
+# "nao reconheci o formato desta chave" — as duas coisas verdadeiras, e
+# nenhuma explicando que o problema eram duas aspas no arquivo.
+#
+# O nome da variavel tambem vai aparado: 'CHAVE = valor' criava uma variavel
+# chamada 'CHAVE ' (com espaco), que nenhum getenv encontra.
+function Load-Env {
+  if(-not(Test-Path $EnvFile)){throw 'Arquivo .env.local nao encontrado.'}
+  Get-Content $EnvFile | ForEach-Object {
+    $line=$_.Trim()
+    if($line -and -not $line.StartsWith('#') -and $line.Contains('=')){
+      $parts=$line.Split('=',2)
+      $nome=$parts[0].Trim()
+      $valor=$parts[1].Trim().Trim('"').Trim("'")
+      if($nome){[Environment]::SetEnvironmentVariable($nome,$valor,'Process')}
+    }
+  }
+}
 function Set-EnvValue([string]$Key,[string]$Value){$lines=@();if(Test-Path $EnvFile){$lines=Get-Content $EnvFile};$found=$false;$out=New-Object System.Collections.Generic.List[string];foreach($line in $lines){if($line -match ('^\s*'+[regex]::Escape($Key)+'\s*=')){$out.Add("$Key=$Value");$found=$true}else{$out.Add($line)}};if(-not $found){$out.Add("$Key=$Value")};[IO.File]::WriteAllLines($EnvFile,$out,[Text.UTF8Encoding]::new($false))}
 function Test-Health([int]$Port){try{$r=Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/health" -TimeoutSec 2;return $r.StatusCode -eq 200}catch{return $false}}
 function Test-PortFree([int]$Port){try{$l=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,$Port);$l.Start();$l.Stop();return $true}catch{return $false}}

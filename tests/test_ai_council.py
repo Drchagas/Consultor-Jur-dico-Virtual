@@ -482,10 +482,36 @@ def test_ferramenta_de_diagnostico_existe():
 
 
 def test_diagnostico_nunca_imprime_a_chave_inteira():
+    """EXECUTA o diagnóstico e confere a saída.
+
+    Antes este teste procurava o texto "chave[-4:]" dentro do arquivo. Passava
+    enquanto aquele trecho existisse — e reprovava ao renomear a variável,
+    mesmo com o comportamento correto. Pior: teria passado se alguém
+    imprimisse a chave inteira em OUTRA linha, deixando o trecho antigo
+    intacto. É o erro que o CLAUDE.md registra: teste que só casa string no
+    arquivo não vale. Se a função pode ser chamada, chame.
+    """
+    import subprocess
+
     for c in (RAIZ / "tools", _RAIZ / "tools"):
-        if (c / "diagnosticar_ia.py").is_file():
-            fonte = (c / "diagnosticar_ia.py").read_text(encoding="utf-8")
-            assert "chave[-4:]" in fonte
-            assert "print(f\"        valor...: {chave}\")" not in fonte
-            return
+        if not (c / "diagnosticar_ia.py").is_file():
+            continue
+        raiz = c.parent
+        segredo = "sk-ant-api03-SEGREDOqueNAOpodeAPARECERnaSAIDA"
+        ambiente = dict(os.environ,
+                        ANTHROPIC_API_KEY=segredo,
+                        JARBAS_ROOT=str(raiz),
+                        PYTHONIOENCODING="utf-8")
+        saida = subprocess.run(
+            [sys.executable, str(c / "diagnosticar_ia.py")],
+            capture_output=True, text=True, timeout=120, env=ambiente, cwd=str(raiz),
+        )
+        texto = saida.stdout + saida.stderr
+
+        assert segredo not in texto, "o diagnóstico imprimiu a chave inteira"
+        assert segredo[7:] not in texto, "o diagnóstico imprimiu o miolo da chave"
+        # O prefixo público é o que resolve o caso; o final identifica a chave.
+        assert "sk-ant-" in texto, "sem o prefixo não dá para diagnosticar nada"
+        assert segredo[-4:] in texto, "sem os últimos dígitos não dá para saber qual chave é"
+        return
     pytest.skip("sem tools/ neste layout")
