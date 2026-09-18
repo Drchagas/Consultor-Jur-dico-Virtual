@@ -12,7 +12,12 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(os.environ.get("JARBAS_ROOT", Path(__file__).resolve().parent.parent)).resolve()
+_BASE = Path(os.environ.get("JARBAS_ROOT", Path(__file__).resolve().parent.parent)).resolve()
+# A árvore de fontes e a instalação têm app/ na raiz; o pacote montado tem
+# payload/app/. Os demais utilitários já tratam os dois — este não tratava, e
+# rodá-lo de dentro do pacote falhava com "No module named 'app'", uma
+# mensagem que sugere instalação quebrada quando o layout é que era outro.
+ROOT = _BASE / "payload" if (_BASE / "payload" / "app").is_dir() else _BASE
 sys.path.insert(0, str(ROOT))
 
 OK, FALHA, AVISO = "  [OK]   ", "  [FALHA]", "  [aviso]"

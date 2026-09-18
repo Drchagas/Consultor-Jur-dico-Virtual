@@ -220,7 +220,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Idioma português do OCR que viaja no pacote de instalação. O instalador do
 # Tesseract traz só o inglês; sem isto, o OCR de um auto brasileiro tenta ler
 # "INTIMAÇÃO" com o modelo do inglês e devolve texto inutilizável.
-_POR_EMBUTIDO = BASE_DIR / "installer" / "ocr" / "por.traineddata"
+def _achar_portugues() -> Optional[Path]:
+    """O idioma do OCR muda de lugar conforme o layout.
+
+    - árvore de fontes ...... installer/ocr/por.traineddata
+    - pacote de instalação .. ocr/por.traineddata (raiz), com app em payload/app
+    - instalação no Windows . installer/ocr/por.traineddata
+
+    Um caminho fixo funcionava em dois dos três e falhava em silêncio no
+    terceiro — e falha silenciosa aqui significa OCR rodando em inglês num
+    auto brasileiro, que devolve letra embaralhada sem dar erro.
+    """
+    candidatos = (
+        BASE_DIR / "installer" / "ocr" / "por.traineddata",
+        BASE_DIR / "ocr" / "por.traineddata",
+        BASE_DIR.parent / "ocr" / "por.traineddata",
+    )
+    return next((c for c in candidatos if c.is_file()), None)
+
+
+_POR_EMBUTIDO = _achar_portugues()
 
 
 def _garantir_portugues(tessdata: Path) -> bool:
@@ -235,7 +254,7 @@ def _garantir_portugues(tessdata: Path) -> bool:
     try:
         if not tessdata.is_dir() or (tessdata / "por.traineddata").is_file():
             return False
-        if not _POR_EMBUTIDO.is_file():
+        if not _POR_EMBUTIDO or not _POR_EMBUTIDO.is_file():
             return False
         shutil.copy2(_POR_EMBUTIDO, tessdata / "por.traineddata")
         LOGGER.info("idioma português do OCR instalado em %s", tessdata)

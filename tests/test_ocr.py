@@ -23,9 +23,17 @@ sys.path.insert(0, str(RAIZ))
 
 from app import pdf_pipeline as P  # noqa: E402
 
-# Na árvore de fontes fica em installer/ocr; na instalação, em installer/ocr
-# dentro da raiz — o mesmo caminho relativo que o app consulta.
-POR = _RAIZ / "installer" / "ocr" / "por.traineddata"
+# A suíte roda em dois lugares: na árvore de fontes e DENTRO do pacote
+# montado, onde o idioma fica em ocr/ na raiz. Um caminho fixo deixava quatro
+# testes vermelhos no pacote — e teste que acusa falha onde não há ensina a
+# equipe a ignorar a suíte inteira.
+POR = next(
+    (c for c in (_RAIZ / "installer" / "ocr" / "por.traineddata",
+                 _RAIZ / "ocr" / "por.traineddata",
+                 RAIZ / "ocr" / "por.traineddata")
+     if c.is_file()),
+    _RAIZ / "installer" / "ocr" / "por.traineddata",
+)
 
 
 def test_o_idioma_portugues_viaja_no_projeto():
@@ -144,3 +152,30 @@ def test_o_instalador_de_ocr_explica_o_que_fazer_quando_falha():
     assert "continua funcionando sem OCR" in fonte, (
         "o operador precisa saber que o sistema não ficou quebrado"
     )
+
+
+def test_o_idioma_e_encontrado_em_qualquer_layout(tmp_path, monkeypatch):
+    """Caminho fixo funcionava em dois layouts de três e falhava no terceiro.
+
+    Falha silenciosa aqui significa OCR rodando em inglês num auto brasileiro:
+    roda, não dá erro, e devolve letra embaralhada.
+    """
+    conteudo = POR.read_bytes()[:1000] if POR.is_file() else b"modelo"
+    for relativo in ("installer/ocr", "ocr"):
+        raiz = tmp_path / relativo.replace("/", "_")
+        alvo = raiz / relativo
+        alvo.mkdir(parents=True)
+        (alvo / "por.traineddata").write_bytes(conteudo)
+        monkeypatch.setattr(P, "BASE_DIR", raiz)
+        achado = P._achar_portugues()
+        assert achado is not None and achado.is_file(), f"não achou em {relativo}"
+
+
+def test_ausencia_do_idioma_nao_derruba_a_leitura(tmp_path, monkeypatch):
+    """Sem o arquivo, seguimos com o que o Tesseract tiver instalado."""
+    monkeypatch.setattr(P, "BASE_DIR", tmp_path)
+    assert P._achar_portugues() is None
+    monkeypatch.setattr(P, "_POR_EMBUTIDO", None)
+    tessdata = tmp_path / "tessdata"
+    tessdata.mkdir()
+    assert P._garantir_portugues(tessdata) is False  # não levanta
