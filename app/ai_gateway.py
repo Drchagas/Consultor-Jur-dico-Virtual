@@ -81,7 +81,7 @@ _INVISIVEIS = "\ufeff\u200b\u200c\u200d\u2060\u00a0"
 _CHAVE_SANEADA: list[str] = []
 
 
-def _limpar_chave(bruta: str) -> str:
+def _limpar_chave(bruta: str, *, registrar: bool = True) -> str:
     """Tira da chave o que nunca faz parte dela.
 
     Existe por causa de um caso real: o erro na tela dizia ao mesmo tempo
@@ -103,25 +103,26 @@ def _limpar_chave(bruta: str) -> str:
 
     Sanear aqui conserta os três de uma vez, em qualquer caminho de entrada.
     """
+    anotar = _registrar_saneamento if registrar else (lambda motivo: None)
     k = bruta or ""
     for c in _INVISIVEIS:
         if c in k:
             k = k.replace(c, "")
-            _registrar_saneamento("caractere invisível")
+            anotar("caractere invisível")
     if k != k.strip():
-        _registrar_saneamento("espaço em volta")
+        anotar("espaço em volta")
         k = k.strip()
 
     # Linha inteira colada no campo: fica ANTHROPIC_API_KEY=<chave>.
     if "=" in k:
         nome, _, valor = k.partition("=")
         if nome.strip().strip("\"'").upper() == ENV_CHAVE:
-            _registrar_saneamento("nome da variável colado junto")
+            anotar("nome da variável colado junto")
             k = valor.strip()
 
     # Aspas em volta, do .env.local ou do copiar-e-colar.
     if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'":
-        _registrar_saneamento("aspas em volta")
+        anotar("aspas em volta")
         k = k[1:-1].strip()
     return k
 
@@ -474,14 +475,94 @@ def _set_env_line(lines: list[str], key: str, value: str) -> list[str]:
     return saida
 
 
+def chave_do_arquivo() -> str:
+    """A chave gravada no .env.local, lida do arquivo e não do ambiente.
+
+    Existe para responder a UMA pergunta que o operador não tem como responder
+    sozinho: "salvei a chave na tela, por que continua sem IA depois que
+    reiniciei?". O app roda load_dotenv(override=False) — o que já está no
+    ambiente do Windows vence o arquivo. Sem comparar os dois, a tela mostra
+    "configurada", o arquivo está certo, e mesmo assim quem é usado é o valor
+    velho exportado pelo Windows.
+    """
+    for linha in _read_env_lines():
+        if linha.strip().startswith(f"{ENV_CHAVE}="):
+            return _limpar_chave(linha.split("=", 1)[1], registrar=False)
+    return ""
+
+
+def origem_da_chave() -> str:
+    """De onde vem a chave em uso: 'ausente', 'arquivo', 'ambiente' ou 'conflito'.
+
+    'conflito' é o caso perigoso: o .env.local tem uma chave e o ambiente tem
+    OUTRA. Quem manda é o ambiente, e nada na tela deixaria isso visível.
+    """
+    do_ambiente = _limpar_chave(os.getenv(ENV_CHAVE, ""), registrar=False)
+    do_arquivo = chave_do_arquivo()
+    if not do_ambiente and not do_arquivo:
+        return "ausente"
+    if do_ambiente and not do_arquivo:
+        return "ambiente"
+    if do_arquivo and not do_ambiente:
+        return "arquivo"
+    return "arquivo" if do_ambiente == do_arquivo else "conflito"
+
+
+class ChaveInvalida(ValueError):
+    """A chave colada não tem como funcionar; dizer isso antes de gravar."""
+
+
+def validar_chave(bruta: str) -> str:
+    """Devolve a chave limpa ou levanta ChaveInvalida explicando o porquê.
+
+    A validação é de FORMATO, e só recusa o que comprovadamente pertence a
+    outro fornecedor. Uma chave da Anthropic com formato novo não pode deixar
+    de ser aceita por causa desta função.
+    """
+    chave = _limpar_chave(bruta, registrar=False)
+    if not chave:
+        raise ChaveInvalida(
+            "Nenhuma chave foi informada. Copie a chave inteira do console da "
+            "Anthropic (console.anthropic.com > API Keys) e cole no campo.")
+    tipo, diagnostico = formato_chave(chave)
+    if tipo in ("openai", "google"):
+        raise ChaveInvalida(diagnostico)
+    if tipo == "desconhecido":
+        raise ChaveInvalida(
+            diagnostico + " Confira se copiou a chave inteira: o console só a "
+            "mostra uma vez, e um copiar-e-colar cortado é a causa mais comum.")
+    return chave
+
+
+def salvar_chave(bruta: str) -> str:
+    """Grava a chave no .env.local desta instalação e devolve a chave limpa.
+
+    Toda entrada de chave do sistema passa por aqui: o que o operador cola na
+    tela nunca vai para o arquivo como veio. Colar a linha inteira do
+    .env.local, com aspas ou com espaço invisível do navegador, é o caminho
+    conhecido para um 401 que ninguém consegue explicar.
+    """
+    if os.getenv("JARBAS_ALLOW_SECRET_CONFIG", "0") != "1":
+        raise RuntimeError("Configuracao de segredo pela interface esta desativada.")
+    chave = validar_chave(bruta)
+    linhas = _set_env_line(_read_env_lines(), ENV_CHAVE, chave)
+    ENV_FILE.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    os.environ[ENV_CHAVE] = chave
+    return chave
+
+
 def save_local_config(*, api_key: str, legal_model: str, intake_model: str,
                       routine_model: str) -> None:
     if os.getenv("JARBAS_ALLOW_SECRET_CONFIG", "0") != "1":
         raise RuntimeError("Configuracao de segredo pela interface esta desativada.")
     linhas = _read_env_lines()
-    if api_key.strip():
-        linhas = _set_env_line(linhas, ENV_CHAVE, api_key.strip())
-        os.environ[ENV_CHAVE] = api_key.strip()
+    # A chave é saneada ANTES de ir para o disco. Gravar o que veio do campo
+    # deixa o arquivo errado para sempre: o Python conserta na leitura, o
+    # PowerShell do INICIAR_JARBAS não, e o 401 volta no próximo reinício.
+    limpa = _limpar_chave(api_key, registrar=False)
+    if limpa:
+        linhas = _set_env_line(linhas, ENV_CHAVE, limpa)
+        os.environ[ENV_CHAVE] = limpa
     for chave_env, valor in (("JARBAS_AI_MODEL_LEGAL", legal_model),
                              ("JARBAS_AI_MODEL_INTAKE", intake_model),
                              ("JARBAS_AI_MODEL_ROUTINE", routine_model)):

@@ -1,5 +1,73 @@
-JARBAS Juridico Enterprise 9.1.0
+JARBAS Juridico Enterprise 9.2.0
 =================================
+
+O QUE MUDOU DESDE A 9.1.0
+
+CHAVE DA IA DEPOIS DA INSTALACAO
+- Nova tela CONFIGURAR IA, no menu lateral, com endereco proprio
+  (/configurar-ia). Ate a 9.1 a unica forma de informar a chave era durante
+  a instalacao — quando o advogado quase nunca a tem em maos — ou um campo
+  escondido no segundo painel das Configuracoes, visivel so para Super Admin
+  e so com JARBAS_ALLOW_SECRET_CONFIG=1, condicao que ninguem descobre
+  sozinha. Quem pulava o passo ficava sem IA e sem caminho de volta.
+- A chave e TESTADA antes de ser gravada. Uma chave errada nunca substitui
+  uma que funciona: o console da Anthropic mostra cada chave uma unica vez,
+  e perder a que estava valendo por um erro de digitacao nao tem desfazer.
+- O que vai para o .env.local e a chave PURA. Colar a linha inteira do
+  arquivo, com aspas ou com caractere invisivel do navegador, deixava o
+  arquivo errado: o Python consertava na leitura, o PowerShell do
+  INICIAR_JARBAS nao, e o 401 voltava no reinicio seguinte.
+- A tela avisa quando existe uma variavel ANTHROPIC_API_KEY no ambiente do
+  WINDOWS com valor diferente do arquivo. O app roda load_dotenv com
+  override=False: quem vence e a variavel do Windows. Sem esse aviso, o
+  operador corrige o arquivo, reinicia e nada muda — sem nenhuma pista.
+- Em qualquer tela, enquanto a IA estiver desligada, aparece uma faixa
+  dizendo o que fica indisponivel, o que continua funcionando e onde
+  configurar.
+
+INSTALACAO MAIS VISUAL
+- INSTALAR.cmd passa a ser o unico arquivo a abrir. Ele confere antes se o
+  ZIP foi mesmo extraido: executar de dentro do ZIP e a falha numero 1, e o
+  erro que aparecia falava de "manifesto SHA-256", que nao diz nada a quem
+  instala. INSTALAR_AGORA.cmd continua existindo como apelido.
+- Tela de abertura explicando o que vai acontecer, quanto tempo leva, que
+  nenhum dado sai da maquina e que a chave da IA e opcional.
+- Barra de progresso e cabecalho por passo, em lugar de 19 linhas cinzas
+  iguais. Cada resultado sai marcado como [OK], [!] ou [X].
+- O passo da chave agora diz, com todas as letras, que e opcional e aponta
+  o menu CONFIGURAR IA para depois.
+- Encerramento em quadros: endereco, usuario, primeiros passos dentro do
+  sistema e as recomendacoes de quem opera com autos reais. O navegador
+  abre sozinho na tela de login.
+- Erro de instalacao tambem sai em quadro, com o que fazer e onde esta o log.
+
+IMPORTAR PASTAS DE CLIENTES
+- Nova tela IMPORTAR PASTAS, com duas origens e um so caminho:
+  * ENVIAR A PASTA pelo navegador. Funciona em qualquer instalacao,
+    inclusive em servidor, e o sistema nao enxerga nada do disco alem do
+    que foi enviado. A estrutura de pastas e preservada.
+  * MAPEAR UMA PASTA do computador. Somente na instalacao local, e somente
+    com JARBAS_PERMITE_MAPEAR_PASTA=1 — que o instalador do Windows grava.
+    Em servidor compartilhado isso seria leitura de arquivo do servidor
+    concedida a quem tem login, entao vem desligado por padrao.
+- Cada subpasta do primeiro nivel vira um CLIENTE; cada subpasta dentro
+  dela vira um PROCESSO. Os PDFs sao copiados e indexados.
+- NADA e cadastrado sem confirmacao. A leitura produz uma PROPOSTA com nome,
+  CPF/CNPJ, numero CNJ, tribunal e grau de confianca; o advogado corrige,
+  desmarca o que nao quer e so entao grava.
+- A pasta de origem nao e tocada: nada e movido, renomeado ou apagado.
+- O CPF so e atribuido ao cliente quando a parte do PDF tem o MESMO nome da
+  pasta. Pegar o documento da primeira parte que aparece produziria
+  procuracao com o numero do adversario — e ninguem conferiria, porque o
+  campo estaria preenchido.
+- A IA e opcional e le UM PDF por processo, com teto por execucao
+  (JARBAS_IMPORT_MAX_IA, padrao 25). Sem ela, a leitura e local e nao custa.
+- Cliente existente e reaproveitado pelo CPF/CNPJ, nunca por nome: homonimo
+  e comum e unir dois dossieis misturaria processos de pessoas diferentes.
+- Arquivo repetido nao entra duas vezes (conferencia por SHA-256).
+- Limitacao registrada: somente PDF e importado. O JARBAS so indexa e exibe
+  PDF; guardar DOCX e imagem daria a impressao falsa de autos completos.
+  O que ficou de fora aparece na tela, nominalmente.
 
 O QUE MUDOU DESDE A 9.0.2
 
@@ -62,7 +130,7 @@ TESTES: 386 (eram 284 na 9.0.2), iguais no pytest e no minipytest.
 ATENCAO AO ATUALIZAR
 Apague a pasta extraida da versao anterior antes de extrair esta. Extrair por
 cima ja falhou uma vez: os arquivos nao foram substituidos e a instalacao
-rodou o pacote antigo. O nome da pasta mudou para JARBAS_Instalador_9_1_0,
+rodou o pacote antigo. O nome da pasta mudou para JARBAS_Instalador_9_2_0,
 o que torna a confusao menos provavel.
 
 -----------------------------------------------------------------------

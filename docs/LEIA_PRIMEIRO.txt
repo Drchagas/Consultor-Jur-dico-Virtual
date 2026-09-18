@@ -1,4 +1,4 @@
-JARBAS JURIDICO ENTERPRISE 9.0.2
+JARBAS JURIDICO ENTERPRISE 9.2.0
 CHAGAS - ADVOGADOS
 
 ========================================================================
@@ -14,10 +14,16 @@ CHAGAS - ADVOGADOS
    arquivo corrompido, baixe o ZIP de novo: instalar com arquivo truncado
    deixa o sistema quebrado de um jeito dificil de diagnosticar.
 
-3. Execute INSTALAR_AGORA.cmd.
-   Defina a senha do administrador quando for pedida. A instalacao leva
-   alguns minutos: ela baixa o Python, instala as dependencias, migra o
-   banco, roda um self-test e so entao se considera concluida.
+3. Execute INSTALAR.cmd. E o unico arquivo que voce precisa abrir.
+   A tela mostra, antes de comecar, o que vai acontecer e quanto tempo
+   leva. Depois acompanha passo a passo, com barra de progresso.
+   Defina a senha do administrador quando for pedida. A instalacao baixa
+   o Python, instala as dependencias, migra o banco, roda um self-test e
+   so entao se considera concluida.
+
+   A chave da IA e OPCIONAL nesta etapa. Se voce ainda nao tem, responda
+   N e siga: depois, dentro do sistema, o menu CONFIGURAR IA aceita a
+   chave a qualquer momento, sem reinstalar nada.
 
 4. Ao final, o instalador abre CREDENCIAIS_INICIAIS.txt.
    Guarde esse arquivo em local seguro e apague a copia da Area de Trabalho.
@@ -68,15 +74,38 @@ perder processos.
    Depois de instalar, em um processo ja cadastrado use
    Copiloto > Reprocessar todos os PDFs para reler os autos antigos.
 
-4. CONFIGURE A IA (OPCIONAL).
-   Execute CONFIGURAR_IA.cmd e cole a chave gerada em console.anthropic.com
-   (comeca com sk-ant-). O provedor e a Anthropic; chave da OpenAI NAO
-   funciona. Sem chave, o JARBAS opera normalmente como gestao de processos,
-   clientes, prazos, documentos e financeiro.
+4. CONFIGURE A IA (OPCIONAL, A QUALQUER MOMENTO).
+   Dentro do sistema, menu CONFIGURAR IA: cole a chave gerada em
+   console.anthropic.com (comeca com sk-ant-). A tela testa a chave antes
+   de grava-la, de modo que uma chave errada nunca substitui uma que
+   funciona. Pela linha de comando o equivalente e CONFIGURAR_IA.cmd.
+
+   O provedor e a Anthropic; chave da OpenAI NAO funciona. Sem chave, o
+   JARBAS opera normalmente como gestao de processos, clientes, prazos,
+   documentos e financeiro.
+
+   ATENCAO: se existir uma variavel ANTHROPIC_API_KEY no ambiente do
+   Windows, ela vence o arquivo do sistema. A tela Configurar IA avisa
+   quando isso acontece; o DIAGNOSTICO_JARBAS.cmd mostra em qual escopo.
 
    Toda saida da IA e minuta tecnica auxiliar. Confira cada fato, cada data,
    cada numero de processo e cada jurisprudencia na fonte oficial antes de
    protocolar.
+
+5. TRAGA AS PASTAS DE CLIENTES QUE JA EXISTEM.
+   Menu IMPORTAR PASTAS. Duas formas, mesmo resultado:
+
+   - Enviar a pasta pelo navegador: funciona em qualquer instalacao.
+   - Mapear uma pasta do computador: informe o caminho (ex.: D:\Clientes)
+     e o JARBAS le direto do disco, sem trafegar nada pela rede.
+
+   Cada subpasta do primeiro nivel vira um CLIENTE; cada subpasta dentro
+   dela vira um PROCESSO. Somente PDF e importado.
+
+   NADA e cadastrado automaticamente: o sistema monta uma proposta, voce
+   confere nome, CPF/CNPJ e numero do processo, marca o que quer e so
+   entao grava. A sua pasta original nao e movida nem apagada — os PDFs
+   sao copiados.
 
 ========================================================================
  QUANDO ALGO DER ERRADO
@@ -89,6 +118,7 @@ IA nao responde .......... DIAGNOSTICAR_IA.cmd
 Arquivo alterado ......... VERIFICAR_INTEGRIDADE.cmd
 Esqueceu a senha ......... RESETAR_SENHA.cmd
 Backup agora ............. BACKUP_JARBAS.cmd
+Pasta nao importa ........ confira se ha PDF nela; so PDF e importado
 
 Guarde o codigo do erro e o arquivo de diagnostico antes de tentar
 consertar por conta propria.

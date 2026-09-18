@@ -1,0 +1,100 @@
+{% extends "base.html" %}{% block title %}Configurar IA · JARBAS{% endblock %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">Passo opcional · pode ser feito a qualquer momento</span>
+<h1>Configurar a IA</h1>
+<p>O JARBAS funciona sem chave. A chave liga a leitura de PDF pela IA, o Copiloto do processo, a Central IA e o Conselho.</p></div></div>
+
+{% if flash %}<div class="alert {{ 'success-box' if flash_ok else 'warning-box' }}">{{ flash }}</div>{% endif %}
+
+<div class="ai-connection-card {{ 'on' if ai_status.configured and ai_status.sdk_available else 'off' }}">
+  <strong>{{ 'IA ligada' if ai_status.configured and ai_status.sdk_available else 'IA desligada' }}</strong>
+  <small>{% if ai_status.configured %}Chave {{ ai_status.key_hint }} · SDK anthropic {{ ai_status.sdk_version or 'não instalado' }} · modelo jurídico {{ ai_status.legal_model }}{% else %}Nenhuma chave configurada nesta instalação{% endif %}</small>
+</div>
+
+{% if ai_origem == 'conflito' %}
+<div class="alert danger"><b>Duas chaves diferentes ao mesmo tempo.</b>
+O arquivo <code>.env.local</code> tem uma chave e o ambiente do Windows tem outra.
+Quem vence é a do Windows, então corrigir o arquivo não muda nada.
+Rode <code>DIAGNOSTICO_JARBAS.cmd</code>: ele mostra em qual escopo (Process, User ou Machine)
+a variável <code>ANTHROPIC_API_KEY</code> está definida. Remova-a por lá e reinicie o JARBAS.</div>
+{% elif ai_origem == 'ambiente' %}
+<div class="alert warning-box">A chave em uso vem de uma <b>variável de ambiente do Windows</b>, não deste sistema.
+Salvar uma chave nova aqui funciona até o próximo reinício; depois a variável do Windows volta a vencer.
+Para a chave desta tela valer sempre, remova a variável do Windows.</div>
+{% endif %}
+
+{% if ai_saneada %}
+<div class="alert warning-box">A chave guardada precisou ser limpa na leitura ({{ ai_saneada|join(', ') }}).
+Ela está funcionando, mas o valor gravado está errado e o problema volta na próxima instalação.
+Cole a chave de novo abaixo para gravá-la corretamente.</div>
+{% endif %}
+
+{% if ai_modelos_ignorados %}
+<div class="alert warning-box">Configuração antiga ignorada: {% for k, v in ai_modelos_ignorados.items() %}<code>{{ k }}={{ v }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+São modelos de um provedor que o JARBAS 9 não usa mais. Estão valendo os modelos Claude padrão — salve os modelos abaixo para limpar o arquivo.</div>
+{% endif %}
+
+<div class="grid2 wide-left">
+<section class="panel"><span class="eyebrow">1 · a chave</span><h2>Chave da Anthropic</h2>
+{% if pode_configurar %}
+<ol class="passos">
+  <li>Abra <b>console.anthropic.com</b> e entre na sua conta.</li>
+  <li>Vá em <b>API Keys</b> e clique em <b>Create Key</b>.</li>
+  <li>Copie a chave inteira — ela começa com <code>sk-ant-</code> e o console só a mostra uma vez.</li>
+  <li>Cole no campo abaixo e clique em salvar. O JARBAS testa a chave antes de gravar.</li>
+</ol>
+<form method="post" action="/configurar-ia/chave" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+<label>Cole a chave aqui<input type="password" name="api_key" autocomplete="new-password" required
+  placeholder="{% if ai_status.configured %}Cole a chave nova para substituir a atual{% else %}sk-ant-...{% endif %}"></label>
+<button>Testar e salvar a chave</button></form>
+<div class="action-row">
+  <form method="post" action="/configurar-ia/testar"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="secondary">Testar a conexão</button></form>
+  {% if ai_status.configured %}<form method="post" action="/configurar-ia/remover" onsubmit="return confirm('Remover a chave? A IA será desligada e o restante do sistema continua funcionando.');"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="secondary">Remover a chave</button></form>{% endif %}
+</div>
+<div class="safe-note">A chave fica gravada apenas no <code>.env.local</code> deste computador, nunca é mostrada de volta na tela
+e nunca aparece no arquivo de diagnóstico. Não a envie por WhatsApp, e-mail ou print.</div>
+{% else %}
+<p class="empty">Nesta instalação a chave é administrada fora do sistema.</p>
+<div class="safe-note">No Windows, rode <code>CONFIGURAR_IA.cmd</code> na pasta do JARBAS.
+Em servidor, defina <code>ANTHROPIC_API_KEY</code> no ambiente ou no gerenciador de segredos.
+Para liberar esta tela, o administrador precisa de <code>JARBAS_ALLOW_SECRET_CONFIG=1</code> e perfil Super Admin.</div>
+{% endif %}
+</section>
+
+<section class="panel"><span class="eyebrow">2 · o que muda</span><h2>Com e sem chave</h2>
+<div class="feature-list">
+  <div><b>Funciona sem chave</b><span>clientes, processos, prazos, agenda, financeiro, timesheet, relatórios, documentos automáticos, busca e leitura local de PDF com texto</span></div>
+  <div><b>Só com chave</b><span>Intake Inteligente lendo o PDF, Copiloto do processo, Central IA, Conselho de IA e minutas assistidas</span></div>
+  <div><b>Autos digitalizados</b><span>PDF que é só imagem depende do OCR local: rode <code>INSTALAR_OCR.cmd</code>. Com chave, a IA também lê direto do PDF</span></div>
+  <div><b>Custo</b><span>a chave é cobrada pela Anthropic por uso. O teto mensal desta instalação está em <code>JARBAS_AI_TETO_USD_MES</code></span></div>
+</div>
+{% if pode_configurar %}
+<h3>Modelos</h3>
+<form method="post" action="/configurar-ia/modelos" class="form-stack"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+<div class="form-grid3">
+<label>Jurídico<select name="legal_model">{% for m in ['claude-opus-5','claude-sonnet-5','claude-haiku-4-5-20251001'] %}<option value="{{ m }}" {% if ai_status.legal_model==m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+<label>Intake<select name="intake_model">{% for m in ['claude-sonnet-5','claude-opus-5','claude-haiku-4-5-20251001'] %}<option value="{{ m }}" {% if ai_status.intake_model==m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+<label>Rotinas<select name="routine_model">{% for m in ['claude-haiku-4-5-20251001','claude-sonnet-5','claude-opus-5'] %}<option value="{{ m }}" {% if ai_status.routine_model==m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+</div>
+<button class="secondary">Salvar modelos</button></form>
+{% endif %}
+<div class="safe-note">Toda saída de IA é minuta auxiliar: fundamento legal, jurisprudência e prazo precisam de conferência humana antes do protocolo.</div>
+</section>
+</div>
+
+{% if not ai_status.sdk_available %}
+<section class="panel"><span class="eyebrow">Atenção</span><h2>O pacote da Anthropic não está instalado</h2>
+<p>A chave sozinha não basta: falta a biblioteca que conversa com a Claude. Sem ela, mesmo com a chave certa a IA não liga.</p>
+<p class="muted">No Windows, rode <code>CONFIGURAR_IA.cmd</code> — ele instala o pacote. Em servidor: <code>pip install -r requirements-ia.txt</code>.</p>
+</section>
+{% endif %}
+
+<section class="panel"><span class="eyebrow">Diagnóstico</span><h2>Situação atual</h2>
+<div class="feature-list">
+  <div><b>Chave</b><span>{{ 'configurada (' ~ ai_status.key_hint ~ ')' if ai_status.configured else 'não configurada' }}</span></div>
+  <div><b>Origem</b><span>{% if ai_origem == 'arquivo' %}.env.local desta instalação{% elif ai_origem == 'ambiente' %}variável de ambiente do Windows{% elif ai_origem == 'conflito' %}arquivo e ambiente em desacordo{% else %}nenhuma{% endif %}</span></div>
+  <div><b>Pacote anthropic</b><span>{{ ai_status.sdk_version or 'não instalado' }}</span></div>
+  <div><b>Mensagem do sistema</b><span>{{ ai_status.message }}</span></div>
+</div>
+<div class="action-row"><a class="button ghost" href="/intake">Ir para o Intake</a><a class="button ghost" href="/ai">Abrir a Central IA</a><a class="button ghost" href="/settings">Configurações do escritório</a></div>
+</section>
+{% endblock %}

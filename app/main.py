@@ -3050,3 +3050,11 @@ app.include_router(billing_router)
 # JARBAS 8.9 — prazos processuais.
 from .prazo_routes import router as prazo_router
 app.include_router(prazo_router)
+
+# JARBAS 9.2 — chave da IA configurável depois da instalação.
+from .ia_routes import router as ia_router
+app.include_router(ia_router)
+
+# JARBAS 9.2 — importação de pastas de clientes (envio e mapeamento).
+from .pasta_routes import router as pasta_router
+app.include_router(pasta_router)

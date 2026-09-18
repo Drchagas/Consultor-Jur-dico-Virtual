@@ -214,3 +214,69 @@ def test_o_diagnostico_mostra_o_build_instalado():
     assert "AUSENTE" in fonte, (
         "instalação sem carimbo precisa ser reportada, não passar em branco"
     )
+
+
+# ======================================== 9.2: instalação visual e amigável
+
+def test_existe_um_unico_arquivo_para_abrir():
+    """Antes havia INSTALAR_AGORA.cmd, ATUALIZAR_OU_REPARAR.cmd e o .ps1 solto.
+
+    Quem extrai o ZIP e vê três executáveis não sabe qual clicar, e clicar no
+    .ps1 no Windows abre o Bloco de Notas.
+    """
+    alvo = _RAIZ / "installer" / "INSTALAR.cmd"
+    if not alvo.is_file():
+        alvo = _RAIZ / "INSTALAR.cmd"
+    assert alvo.is_file(), "INSTALAR.cmd não está no pacote"
+
+
+def test_o_instalador_avisa_quando_rodam_de_dentro_do_zip():
+    """A falha nº 1 relatada: clicar no .cmd sem extrair o ZIP.
+
+    O Windows abre uma cópia temporária, o instalador não acha payload/ e o
+    erro que aparece fala de manifesto SHA-256 — que não diz nada a quem
+    instala.
+    """
+    for candidato in (_RAIZ / "installer" / "INSTALAR.cmd", _RAIZ / "INSTALAR.cmd"):
+        if candidato.is_file():
+            texto = candidato.read_text(encoding="utf-8", errors="replace")
+            break
+    else:
+        pytest.skip("INSTALAR.cmd ausente nesta árvore")
+    assert "payload" in texto, "não confere se o ZIP foi extraído"
+    assert "Extrair Tudo" in texto, "não diz ao operador o que fazer"
+
+
+def test_os_cmd_usam_quebra_de_linha_do_windows():
+    """.cmd com LF sozinho falha em Windows antigo, sem mensagem útil."""
+    pasta = _RAIZ / "installer"
+    if not pasta.is_dir():
+        pytest.skip("sem installer/ neste layout")
+    ruins = [c.name for c in sorted(pasta.glob("*.cmd"))
+             if b"\r\n" not in c.read_bytes()]
+    assert not ruins, f"arquivos .cmd sem CRLF: {ruins}"
+
+
+def test_a_instalacao_mostra_progresso():
+    """19 linhas cinzas iguais não dizem onde a instalação está."""
+    assert "Write-Progress" in FONTE, "sem barra de progresso"
+    assert "function Passo" in FONTE, "sem cabeçalho de passo"
+
+
+def test_a_chave_da_ia_e_apresentada_como_opcional():
+    """Era o que fazia o operador travar: pular o passo e ficar sem caminho
+    de volta, achando que o sistema tinha sido instalado errado."""
+    assert "OPCIONAL" in FONTE
+    assert "CONFIGURAR IA" in FONTE, (
+        "o instalador precisa dizer ONDE configurar a chave depois")
+
+
+def test_a_instalacao_libera_a_importacao_de_pastas():
+    """Sem esta variável, a tela de importação aparece desativada na máquina
+    do escritório — que é justamente onde ela deve funcionar."""
+    assert "JARBAS_PERMITE_MAPEAR_PASTA=1" in FONTE
+
+
+def test_o_encerramento_aponta_os_proximos_passos():
+    assert "IMPORTAR PASTAS" in FONTE
+    assert "duas etapas" in FONTE.lower()

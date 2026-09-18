@@ -1,0 +1,187 @@
+{% extends "base.html" %}{% block title %}Importar pastas · JARBAS{% endblock %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">Acervo do escritório</span>
+<h1>Importar pastas de clientes</h1>
+<p>Uma pasta por cliente, os PDFs dentro. O JARBAS lê, propõe o cadastro e só grava depois que você confere.</p></div></div>
+
+{% if erro %}<div class="alert danger">{{ erro }}</div>{% endif %}
+{% if aviso %}<div class="alert success-box">{{ aviso }}</div>{% endif %}
+
+{% if etapa == 'escolher' %}
+
+<section class="panel"><span class="eyebrow">Como o JARBAS lê a pasta</span><h2>Antes de começar</h2>
+<div class="feature-list">
+  <div><b>1 pasta</b><span>cada subpasta do primeiro nível vira um <b>cliente</b></span></div>
+  <div><b>2 subpasta</b><span>cada subpasta dentro dela vira um <b>processo</b>. Sem subpastas, os PDFs vão para um processo só</span></div>
+  <div><b>3 PDFs</b><span>são copiados para o JARBAS e indexados. A sua pasta original não é movida nem apagada</span></div>
+  <div><b>4 confere</b><span>nada é cadastrado antes de você revisar nome, CPF/CNPJ e número do processo</span></div>
+</div>
+<div class="safe-note">Somente arquivos <b>PDF</b> são importados. DOCX, imagens e planilhas ficam de fora nesta versão — o JARBAS só indexa e exibe PDF, e guardar o resto daria a impressão falsa de que os autos estão completos.</div>
+</section>
+
+<div class="grid2">
+<section class="panel"><span class="eyebrow">Funciona em qualquer instalação</span><h2>Enviar a pasta pelo navegador</h2>
+<p class="muted">Você escolhe a pasta, o navegador envia os arquivos. O JARBAS não enxerga nada do seu disco além do que você mandou.</p>
+<form method="post" action="/importar-pastas/enviar" enctype="multipart/form-data" class="form-stack" id="form-envio">
+<input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+<div class="drop-zone">
+  <strong>Pasta inteira</strong>
+  <input type="file" id="escolha-pasta" webkitdirectory directory multiple>
+  <span class="muted">Escolha a pasta que contém as pastas dos clientes.</span>
+</div>
+<div class="drop-zone">
+  <strong>Ou arquivos avulsos</strong>
+  <input type="file" id="escolha-arquivos" multiple accept="application/pdf,.pdf">
+</div>
+<label class="incluir"><input type="checkbox" name="usar_ia" value="1" {% if not office_ai_connected %}disabled{% endif %}>
+  Usar a IA para ler os PDFs {% if not office_ai_connected %}(indisponível: <a href="/configurar-ia">configure a chave</a>){% endif %}</label>
+<p class="muted" style="font-size:12px">Sem a IA marcada, a leitura é local e não custa nada. Com a IA, no máximo {{ teto_ia }} PDFs por execução, um por processo.</p>
+<div id="resumo-escolha" class="pill-live" hidden></div>
+<button type="submit">Ler a pasta e montar a proposta</button>
+</form>
+<div class="safe-note">Limite de {{ teto_mb }} MB por envio. Acervo maior: envie por partes, por exemplo uma letra do alfabeto de cada vez.</div>
+<noscript><p class="warning">Com o JavaScript desligado, o navegador envia só os nomes dos arquivos, sem a estrutura de pastas — e tudo cai num cliente só.</p></noscript>
+</section>
+
+<section class="panel"><span class="eyebrow">Só na instalação do escritório</span><h2>Mapear uma pasta do computador</h2>
+{% if mapeamento_liberado %}
+<p class="muted">O JARBAS lê a pasta direto no disco desta máquina. Mais rápido para acervos grandes, porque nada trafega pela rede.</p>
+<form method="post" action="/importar-pastas/mapear" class="form-stack">
+<input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+<label>Caminho completo da pasta<input name="caminho" placeholder="D:\Clientes" required></label>
+<label class="incluir"><input type="checkbox" name="usar_ia" value="1" {% if not office_ai_connected %}disabled{% endif %}> Usar a IA para ler os PDFs</label>
+<button class="secondary">Varrer a pasta</button>
+</form>
+<div class="safe-note">A pasta é apenas lida. Os PDFs são copiados para a área do JARBAS; o original continua onde está, com o mesmo nome.</div>
+{% else %}
+<p class="empty">Desativado nesta instalação.</p>
+<div class="safe-note">Ler uma pasta arbitrária do disco é um poder que não pode existir em servidor compartilhado.
+Na instalação do escritório o instalador liga isto sozinho (<code>JARBAS_PERMITE_MAPEAR_PASTA=1</code> no <code>.env.local</code>).
+Use o envio pelo navegador, ao lado — o resultado é o mesmo.</div>
+{% endif %}
+</section>
+</div>
+
+{% if historico %}
+<section class="panel"><span class="eyebrow">Histórico</span><h2>Importações anteriores</h2>
+<div class="table-wrap"><table>
+<tr><th>Quando</th><th>Origem</th><th>Pasta</th><th>Situação</th><th>Resultado</th><th></th></tr>
+{% for h in historico %}
+<tr>
+  <td>{{ h['created_at']|datahora }}</td>
+  <td>{{ 'Envio' if h['origem']=='upload' else 'Mapeamento' }}</td>
+  <td><small class="block">{{ h['caminho'] or '—' }}</small></td>
+  <td>{{ h['status'] }}</td>
+  <td>{{ h['resumo'] or '—' }}</td>
+  <td class="right">{% if h['status']=='pendente' %}<a class="button mini" href="/importar-pastas/{{ h['id'] }}">Revisar</a>{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+</section>
+{% endif %}
+
+<script>
+(function(){
+  var form=document.getElementById('form-envio');
+  if(!form) return;
+  var pasta=document.getElementById('escolha-pasta');
+  var avulsos=document.getElementById('escolha-arquivos');
+  var resumo=document.getElementById('resumo-escolha');
+  function contar(){
+    var n=(pasta.files?pasta.files.length:0)+(avulsos.files?avulsos.files.length:0);
+    resumo.hidden=(n===0);
+    resumo.textContent=n+' arquivo(s) selecionado(s)';
+  }
+  pasta.addEventListener('change',contar);
+  avulsos.addEventListener('change',contar);
+  form.addEventListener('submit',function(ev){
+    ev.preventDefault();
+    var dados=new FormData();
+    dados.append('_csrf',form.querySelector('input[name=_csrf]').value);
+    var ia=form.querySelector('input[name=usar_ia]');
+    if(ia&&ia.checked) dados.append('usar_ia','1');
+    var total=0;
+    [pasta,avulsos].forEach(function(campo){
+      var arquivos=campo.files||[];
+      for(var i=0;i<arquivos.length;i++){
+        // webkitRelativePath preserva a estrutura de pastas; sem ele, todos os
+        // arquivos chegariam com o mesmo nível e viraria um cliente só.
+        var caminho=arquivos[i].webkitRelativePath||arquivos[i].name;
+        dados.append('arquivos',arquivos[i],caminho);
+        total++;
+      }
+    });
+    if(!total){ alert('Escolha uma pasta ou arquivos antes de enviar.'); return; }
+    var botao=form.querySelector('button[type=submit]');
+    botao.disabled=true; botao.textContent='Enviando '+total+' arquivo(s)…';
+    fetch(form.action,{method:'POST',body:dados,credentials:'same-origin',redirect:'follow'})
+      .then(function(r){ window.location=r.url||'/importar-pastas'; })
+      .catch(function(){ botao.disabled=false; botao.textContent='Ler a pasta e montar a proposta';
+                         alert('O envio falhou. Tente com menos arquivos de cada vez.'); });
+  });
+})();
+</script>
+
+{% else %}
+
+<div class="import-tabs"><a href="/importar-pastas">← Nova importação</a><a class="ativo" href="#">Revisão da leitura #{{ importacao['id'] }}</a></div>
+<section class="panel"><span class="eyebrow">Confira antes de gravar</span><h2>{{ importacao['resumo'] }}</h2>
+<p class="muted">Origem: {{ 'envio pelo navegador' if importacao['origem']=='upload' else 'pasta mapeada' }} · <code>{{ importacao['caminho'] }}</code></p>
+<div class="safe-note">Tudo abaixo é <b>proposta</b>. O que estiver desmarcado não é cadastrado. Nome, CPF/CNPJ e número do processo saíram de leitura automática e podem estar errados — corrija nos campos antes de confirmar.</div>
+{% if avisos_varredura %}<div class="alert warning-box"><b>Durante a leitura:</b><ul>{% for a in avisos_varredura[:20] %}<li>{{ a }}</li>{% endfor %}</ul></div>{% endif %}
+</section>
+
+<form method="post" action="/importar-pastas/{{ importacao['id'] }}/confirmar">
+<input type="hidden" name="_csrf" value="{{ csrf_token(request) }}">
+{% for p in propostas %}
+<div class="proposta">
+  <header>
+    <div>
+      <label class="incluir"><input type="checkbox" name="incluir" value="{{ loop.index0 }}" checked> Cadastrar esta pasta</label>
+      <h3>{{ p['pasta'] }}</h3>
+    </div>
+    <span class="pill-live">{{ p['processos']|length }} processo(s)</span>
+  </header>
+  {% for a in p['avisos'] %}<p class="caution">{{ a }}</p>{% endfor %}
+  <div class="campos">
+    <label>Nome do cliente<input name="nome_{{ loop.index0 }}" value="{{ p['cliente_nome'] }}"></label>
+    <label>CPF / CNPJ<input name="doc_{{ loop.index0 }}" value="{{ p['documento'] }}" placeholder="em branco = cadastra sem documento"></label>
+    <label>Pasta de origem<input value="{{ p['pasta'] }}" disabled></label>
+  </div>
+  {% set i = loop.index0 %}
+  {% for c in p['processos'] %}
+  <div class="proposta" style="margin-left:14px">
+    <header>
+      <div>
+        <label class="incluir"><input type="checkbox" name="incluir_proc" value="{{ i }}:{{ loop.index0 }}" checked> Cadastrar este processo</label>
+        <span class="fonte">{{ c['subpasta'] or 'PDFs na raiz da pasta do cliente' }}</span>
+      </div>
+      <div>
+        <span class="confianca {{ c['confianca'] }}">confiança {{ c['confianca'] }}</span>
+        {% if c['ia_usada'] %}<span class="pill-live">lido pela IA</span>{% endif %}
+      </div>
+    </header>
+    <div class="campos">
+      <label>Título<input name="titulo_{{ i }}_{{ loop.index0 }}" value="{{ c['titulo'] }}"></label>
+      <label>Número do processo<input name="numero_{{ i }}_{{ loop.index0 }}" value="{{ c['numero'] }}" placeholder="CNJ, se houver"></label>
+      <label>Tribunal / vara<input value="{{ c['tribunal'] or '—' }}" disabled></label>
+    </div>
+    {% for a in c['avisos'][:6] %}<p class="caution">{{ a }}</p>{% endfor %}
+    <details class="arquivos"><summary>{{ c['arquivos']|length }} PDF(s)</summary>
+      <ul>{% for arq in c['arquivos'][:60] %}<li>{{ arq['relativo'] }} — {{ (arq['tamanho'] / 1048576)|numero }} MB</li>{% endfor %}
+      {% if c['arquivos']|length > 60 %}<li>… e mais {{ c['arquivos']|length - 60 }}.</li>{% endif %}</ul>
+    </details>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+<div class="action-row">
+  <button>Cadastrar o que está marcado</button>
+  <a class="button ghost" href="/importar-pastas">Voltar sem cadastrar</a>
+</div>
+</form>
+
+<form method="post" action="/importar-pastas/{{ importacao['id'] }}/descartar" onsubmit="return confirm('Descartar esta leitura? Nada foi cadastrado e os arquivos enviados serão apagados do JARBAS.');" style="margin-top:14px">
+<input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="secondary">Descartar esta leitura</button></form>
+
+{% endif %}
+{% endblock %}

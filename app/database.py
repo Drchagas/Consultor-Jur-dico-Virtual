@@ -1314,6 +1314,7 @@ def initialize_schema(conn: Connection) -> None:
     conn.executescript(V87_POSTGRES_EXTRA if IS_POSTGRES else V87_SQLITE_EXTRA)
     conn.executescript(V88_POSTGRES_EXTRA if IS_POSTGRES else V88_SQLITE_EXTRA)
     conn.executescript(V89_POSTGRES_EXTRA if IS_POSTGRES else V89_SQLITE_EXTRA)
+    conn.executescript(V92_POSTGRES_EXTRA if IS_POSTGRES else V92_SQLITE_EXTRA)
     ensure_column(conn, "plans", "ai_tier TEXT")
     ensure_column(conn, "plans", "monthly_ai_usd " + ("DOUBLE PRECISION" if IS_POSTGRES else "REAL"))
     ensure_column(conn, "subscriptions", "provider TEXT")
@@ -1452,3 +1453,50 @@ COLUNAS_DEADLINES = [
     "source TEXT",               # manual | intake | datajud
     "movement_id INTEGER",       # movimentação que originou o prazo
 ]
+
+
+# --------------------------------------------------------------------------
+# JARBAS 9.2 — importação de pasta de clientes.
+#
+# A proposta fica gravada, e não na sessão do navegador, por dois motivos:
+# uma varredura de 200 clientes não cabe num cookie, e o advogado precisa
+# poder fechar a tela, conferir os autos e voltar depois para confirmar.
+# --------------------------------------------------------------------------
+
+V92_SQLITE_EXTRA = r"""
+CREATE TABLE IF NOT EXISTS folder_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    user_id INTEGER,
+    origem TEXT NOT NULL DEFAULT 'upload',
+    caminho TEXT,
+    status TEXT NOT NULL DEFAULT 'pendente',
+    propostas_json TEXT NOT NULL DEFAULT '[]',
+    avisos_json TEXT NOT NULL DEFAULT '[]',
+    resumo TEXT,
+    ia_usada INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_folder_imports_org
+    ON folder_imports(organization_id,status,created_at);
+"""
+
+V92_POSTGRES_EXTRA = r"""
+CREATE TABLE IF NOT EXISTS folder_imports (
+    id BIGSERIAL PRIMARY KEY,
+    organization_id BIGINT NOT NULL,
+    user_id BIGINT,
+    origem TEXT NOT NULL DEFAULT 'upload',
+    caminho TEXT,
+    status TEXT NOT NULL DEFAULT 'pendente',
+    propostas_json TEXT NOT NULL DEFAULT '[]',
+    avisos_json TEXT NOT NULL DEFAULT '[]',
+    resumo TEXT,
+    ia_usada INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_folder_imports_org
+    ON folder_imports(organization_id,status,created_at);
+"""

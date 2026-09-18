@@ -16,11 +16,12 @@ Versão em `VERSION.txt`. Contexto técnico do projeto em `CLAUDE.md`.
 4. [Configurar a IA](#4-configurar-a-ia-claude)
 5. [Segurança obrigatória com autos reais](#5-segurança-obrigatória-com-autos-reais)
 6. [Backup e restauração](#6-backup-e-restauração)
-7. [Operação diária](#7-operação-diária)
-8. [Atualizar](#8-atualizar)
-9. [Quando algo dá errado](#9-quando-algo-dá-errado)
-10. [Desenvolvimento](#10-desenvolvimento)
-11. [LGPD e sigilo profissional](#11-lgpd-e-sigilo-profissional)
+7. [Trazer o acervo que já existe](#7-trazer-o-acervo-que-já-existe)
+8. [Operação diária](#8-operação-diária)
+9. [Atualizar](#9-atualizar)
+10. [Quando algo dá errado](#10-quando-algo-dá-errado)
+11. [Desenvolvimento](#11-desenvolvimento)
+12. [LGPD e sigilo profissional](#12-lgpd-e-sigilo-profissional)
 
 ---
 
@@ -43,8 +44,13 @@ perda de dados.
 
 1. Extraia **todo** o ZIP do pacote de instalação. Não execute de dentro do ZIP.
 2. Execute `VERIFICAR_PACOTE.cmd` — confere se nenhum arquivo veio corrompido.
-3. Execute `INSTALAR_AGORA.cmd`.
-4. Defina a senha do administrador quando for pedida.
+3. Execute **`INSTALAR.cmd`** — é o único arquivo a abrir. Ele confere antes
+   se o ZIP foi realmente extraído, mostra o que vai acontecer e acompanha
+   passo a passo com barra de progresso. (`INSTALAR_AGORA.cmd` continua
+   existindo como apelido do mesmo arquivo.)
+4. Defina a senha do administrador quando for pedida. A chave da IA é
+   **opcional** nesta etapa: se ainda não tiver, responda `N` e configure
+   depois pelo menu *Configurar IA*, dentro do sistema.
 5. O instalador abre `CREDENCIAIS_INICIAIS.txt` ao final. **Guarde e apague do
    Desktop.**
 
@@ -65,7 +71,7 @@ Depois de instalado, na pasta `%LOCALAPPDATA%\JARBAS_Enterprise`:
 | `PARAR_JARBAS.cmd` | encerra o servidor |
 | `BACKUP_JARBAS.cmd` | cópia de segurança agora |
 | `BACKUP_AUTOMATICO.ps1` | agenda ou cancela o backup diário |
-| `CONFIGURAR_IA.cmd` | cadastra a chave do Claude |
+| `CONFIGURAR_IA.cmd` | cadastra a chave do Claude pela linha de comando |
 | `INSTALAR_OCR.cmd` | habilita a leitura de autos digitalizados |
 | `DIAGNOSTICO_JARBAS.cmd` | relatório para o suporte |
 | `VERIFICAR_INTEGRIDADE.cmd` | confere se os arquivos foram alterados |
@@ -124,12 +130,24 @@ A partir da 9.0 o provedor é **único: Anthropic (Claude)**. Chave da OpenAI
 não funciona — são empresas distintas.
 
 1. Gere a chave em `console.anthropic.com` (começa com `sk-ant-`).
-2. **Windows**: `CONFIGURAR_IA.cmd`. A chave é testada online antes de ser
-   salva; se o teste falhar, ela não é gravada.
-3. **Servidor**: `ANTHROPIC_API_KEY=` no `.env`, depois `docker compose up -d`.
+2. **Pelo sistema, a qualquer momento**: menu **Configurar IA** (`/configurar-ia`).
+   Cole a chave e salve. Ela é testada antes de ser gravada — uma chave errada
+   nunca substitui a que está funcionando. Também dá para trocar os modelos e
+   remover a chave por ali.
+3. **Windows, pela linha de comando**: `CONFIGURAR_IA.cmd`. Mesmo efeito.
+4. **Servidor**: `ANTHROPIC_API_KEY=` no `.env`, depois `docker compose up -d`.
+   Mantenha `JARBAS_ALLOW_SECRET_CONFIG=0` e a tela fica somente informativa.
 
 **Nunca** envie a chave por WhatsApp, e-mail ou commit. Quem tem a chave gasta
-na sua conta.
+na sua conta. O `DIAGNOSTICO_JARBAS.cmd` mascara qualquer segredo justamente
+porque existe para ser enviado ao suporte.
+
+> **Variável de ambiente do Windows vence o arquivo.** O JARBAS lê o
+> `.env.local` com `override=False`: se existir uma `ANTHROPIC_API_KEY` no
+> ambiente do Windows, é ela que vale, e corrigir o arquivo não muda nada. A
+> tela *Configurar IA* avisa quando os dois discordam; o
+> `DIAGNOSTICO_JARBAS.cmd` mostra em qual escopo (Process, User ou Machine) a
+> variável está definida.
 
 ### Autos digitalizados (OCR)
 
@@ -230,11 +248,58 @@ jeito de saber que o backup funciona antes de precisar dele.
 
 ---
 
-## 7. Operação diária
+## 7. Trazer o acervo que já existe
+
+O escritório já tem os autos organizados em pastas no computador. Recadastrar
+isso à mão é o que faz um sistema novo nunca sair do papel.
+
+Menu **Importar pastas** (`/importar-pastas`). Duas origens, o mesmo resultado:
+
+| | **Enviar a pasta** | **Mapear uma pasta local** |
+|---|---|---|
+| Onde funciona | qualquer instalação | só a instalação local do escritório |
+| Como | o navegador envia os arquivos | o servidor lê direto do disco |
+| Exige | nada | `JARBAS_PERMITE_MAPEAR_PASTA=1` |
+| Acervo grande | envie por partes | lê tudo sem trafegar pela rede |
+
+**Como a estrutura é lida:** cada subpasta do primeiro nível vira um
+**cliente**; cada subpasta dentro dela vira um **processo**. PDFs soltos na
+pasta do cliente formam um processo único.
+
+**Nada é cadastrado sem confirmação.** A leitura produz uma *proposta* — nome,
+CPF/CNPJ, número CNJ, tribunal e um grau de confiança por processo. Você
+corrige os campos, desmarca o que não quer e só então grava. Enquanto isso, a
+pasta de origem não é tocada: os PDFs são **copiados**, nunca movidos,
+renomeados ou apagados.
+
+Detalhes que importam na prática:
+
+- **CPF/CNPJ** só é atribuído ao cliente quando a parte encontrada no PDF tem
+  o **mesmo nome** da pasta. Pegar o documento da primeira parte que aparece
+  produziria procuração com o número do adversário.
+- **Cliente existente** é reaproveitado pelo documento, nunca por nome:
+  homônimo é comum e unir dois dossiês misturaria processos de pessoas
+  diferentes.
+- **A IA é opcional.** Marcada, lê **um** PDF por processo, com teto por
+  execução (`JARBAS_IMPORT_MAX_IA`, padrão 25). Desmarcada, a leitura é local
+  e não custa nada.
+- **Somente PDF é importado.** O JARBAS só indexa e exibe PDF; o que ficar de
+  fora aparece nominalmente na tela.
+- Arquivo repetido não entra duas vezes (conferência por SHA-256).
+
+> Em servidor com mais de um escritório, mantenha `JARBAS_PERMITE_MAPEAR_PASTA=0`.
+> Ler uma pasta arbitrária do disco a pedido de quem está logado é leitura de
+> arquivo do servidor. O envio pelo navegador chega ao mesmo resultado sem
+> esse poder.
+
+---
+
+## 8. Operação diária
 
 | Rotina | Onde |
 |---|---|
 | Abrir processo novo a partir do PDF do eproc | *Intake Inteligente* |
+| Trazer pastas de clientes que já existem | *Importar pastas* |
 | Perguntar aos autos, Hard Truth, minutas | *Copiloto* no processo |
 | Prazos, simulador de contagem | *Prazos* |
 | Honorários, parcelas, despesas, caixa | *Financeiro* |
@@ -246,7 +311,7 @@ sinal de credencial comprometida.
 
 ---
 
-## 8. Atualizar
+## 9. Atualizar
 
 **Windows**: execute `ATUALIZAR_OU_REPARAR.cmd` do novo pacote. Ele faz backup,
 preserva banco, PDFs, identidade visual e a chave da IA, e reindexa os PDFs
@@ -266,7 +331,7 @@ Migrações de schema são automáticas e não apagam tabela existente.
 
 ---
 
-## 9. Quando algo dá errado
+## 10. Quando algo dá errado
 
 | Sintoma | O que fazer |
 |---|---|
@@ -285,7 +350,7 @@ Guarde o código do erro e o arquivo de diagnóstico antes de tentar consertar.
 
 ---
 
-## 10. Desenvolvimento
+## 11. Desenvolvimento
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
@@ -306,7 +371,7 @@ antes de mexer em `database.py` ou nas rotas.
 
 ---
 
-## 11. LGPD e sigilo profissional
+## 12. LGPD e sigilo profissional
 
 Este sistema guarda processos, documentos e dados pessoais de clientes. Isso
 traz deveres que nenhuma configuração substitui:

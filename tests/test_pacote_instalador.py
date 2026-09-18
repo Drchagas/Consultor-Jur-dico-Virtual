@@ -68,11 +68,31 @@ def test_payload_tem_a_aplicacao():
     assert (PKG / "payload" / "requirements.txt").is_file()
 
 
-def test_cmd_aponta_para_o_ps1_que_existe():
-    cmd = (PKG / "INSTALAR_AGORA.cmd").read_text(encoding="utf-8", errors="replace")
-    referenciado = re.search(r"(INSTALAR_JARBAS_[\w.]+\.ps1)", cmd).group(1)
-    assert (PKG / referenciado).is_file(), (
-        f"INSTALAR_AGORA.cmd chama {referenciado}, que não está no pacote")
+def test_todo_cmd_aponta_para_arquivo_que_existe():
+    """Um .cmd que chama arquivo inexistente é "abri e não fez nada".
+
+    A partir da 9.2 a porta de entrada é INSTALAR.cmd e INSTALAR_AGORA.cmd
+    virou apelido dele, então a cadeia .cmd -> .cmd -> .ps1 precisa ser
+    conferida inteira, e não só o primeiro elo.
+    """
+    quebrados = []
+    for cmd in sorted(PKG.glob("*.cmd")):
+        texto = cmd.read_text(encoding="utf-8", errors="replace")
+        for alvo in re.findall(r"(INSTALAR_JARBAS_[\w.]+\.ps1)", texto):
+            if not (PKG / alvo).is_file():
+                quebrados.append(f"{cmd.name} -> {alvo}")
+        for alvo in re.findall(r'call\s+"%~dp0([\w.]+\.cmd)"', texto):
+            if not (PKG / alvo).is_file():
+                quebrados.append(f"{cmd.name} -> {alvo}")
+    assert not quebrados, f"referência quebrada entre arquivos do pacote: {quebrados}"
+
+
+def test_a_porta_de_entrada_do_pacote_existe_e_chama_o_instalador():
+    entrada = PKG / "INSTALAR.cmd"
+    assert entrada.is_file(), "INSTALAR.cmd não foi para o pacote"
+    texto = entrada.read_text(encoding="utf-8", errors="replace")
+    alvo = re.search(r"(INSTALAR_JARBAS_[\w.]+\.ps1)", texto)
+    assert alvo and (PKG / alvo.group(1)).is_file()
 
 
 # ------------------------------------------------------------- manifesto
@@ -141,3 +161,27 @@ def test_o_pacote_sai_sem_bytecode_compilado():
     """
     sobras = [p for p in PKG.rglob("*") if "__pycache__" in p.parts or p.suffix in (".pyc", ".pyo")]
     assert not sobras, "bytecode no pacote:\n" + "\n".join(str(s) for s in sobras[:10])
+
+
+def test_o_pacote_leva_o_pytest_ini():
+    """Sem ele, `pytest -q` dentro do pacote aborta com INTERNALERROR.
+
+    tools/test_claude.py é script OPERACIONAL — o instalador e o
+    CONFIGURAR_IA.ps1 o chamam pelo nome para validar a chave — e o pytest o
+    coletava por causa do prefixo test_. Ele chama sys.exit(1) quando não há
+    chave; SystemExit durante a COLETA derruba a execução inteira e nenhum
+    teste roda.
+
+    Isso é pior dentro do pacote do que na árvore de fontes: é na máquina do
+    escritório que a suíte existe justamente para revalidar a instalação, e
+    lá ela nunca rodava.
+    """
+    ini = PKG / "pytest.ini"
+    assert ini.is_file(), "pytest.ini não foi para o pacote"
+    texto = ini.read_text(encoding="utf-8")
+    assert "testpaths" in texto and "tests" in texto
+
+
+def test_o_instalador_leva_o_pytest_ini_para_a_instalacao():
+    assert "'pytest.ini'" in PS1_TEXTO, (
+        "sem pytest.ini instalado, revalidar a instalação com pytest não funciona")

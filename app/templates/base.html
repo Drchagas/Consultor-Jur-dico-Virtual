@@ -22,6 +22,7 @@
     <nav class="side-nav">
       <a href="/">⌂ <span>Dashboard</span></a>
       <a href="/intake">✦ <span>Intake Inteligente</span></a>
+      <a href="/importar-pastas">⇪ <span>Importar pastas</span></a>
       <a href="/ai">✧ <span>Central IA</span></a>
       <a href="/prazos">⏰ <span>Prazos</span></a>
       <a href="/conselho">⚖ <span>Conselho de IA</span></a>
@@ -39,6 +40,7 @@
       <a href="/billing">◇ <span>Plano e uso</span></a>
       <a href="/settings">⚙ <span>Configurações</span></a>
       <a href="/settings/2fa">⛨ <span>Verificação em 2 etapas</span></a>
+      <a href="/configurar-ia">◉ <span>Configurar IA</span></a>
       {% if user['is_superadmin'] %}<a href="/platform">◆ <span>Plataforma</span></a>{% endif %}
     </nav>
     <div class="sidebar-foot">
@@ -64,6 +66,9 @@
         <a href="/logout" class="text-link">Sair</a>
       </div>
     </header>
+    {% if not office_ai_connected and request.url.path not in ('/configurar-ia',) %}
+    <div class="ai-callout"><span>A IA está desligada: o Intake, o Copiloto e a Central IA ficam indisponíveis. O restante do sistema funciona normalmente.</span><a class="button mini" href="/configurar-ia">Configurar agora</a></div>
+    {% endif %}
     <main class="content">{% block content %}{% endblock %}</main>
     <footer>JARBAS Jurídico {{ app_version }} · gestão integrada + copiloto jurídico + IA · {{ organization['name'] }}</footer>
   </section>

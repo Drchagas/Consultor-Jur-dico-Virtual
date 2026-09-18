@@ -47,7 +47,7 @@ DOCS_NA_RAIZ_DO_PAYLOAD = [
     "MATRIZ_FUNCIONAL_7_0.md", "ARQUITETURA_SAAS_7_0.md",
     "ROADMAP_PRODUCAO.md", "CONSELHO_IA.md",
     "CAPACIDADE_2000_ASSINANTES.md",
-    "NOTAS_DA_VERSAO_9_1_0.txt", "README_INSTALACAO.md", "LEIA_PRIMEIRO.txt",
+    "NOTAS_DA_VERSAO_9_2_0.txt", "README_INSTALACAO.md", "LEIA_PRIMEIRO.txt",
 ]
 
 IGNORAR = shutil.ignore_patterns("__pycache__", "*.pyc", ".env", ".env.local",
@@ -66,8 +66,15 @@ def montar(destino: Path) -> Path:
     shutil.copytree(RAIZ / "app", payload / "app", ignore=IGNORAR)
 
     # 2. Arquivos soltos que o instalador procura em payload/
+    # pytest.ini viaja junto por um motivo concreto: sem ele, `pytest -q`
+    # rodado de dentro do pacote (ou da instalação) coleta tools/test_claude.py,
+    # que é script OPERACIONAL e chama sys.exit(1) quando não há chave. O
+    # SystemExit durante a coleta aborta tudo com INTERNALERROR e NENHUM teste
+    # roda — exatamente na máquina do escritório, onde a suíte existe para
+    # revalidar a instalação.
     for nome in ("requirements.txt", "requirements-ia.txt", "requirements-dev.txt",
-                 "VERSION.txt", "LICENSE_PROPRIETARY.txt", ".env.example"):
+                 "VERSION.txt", "LICENSE_PROPRIETARY.txt", ".env.example",
+                 "pytest.ini"):
         origem = RAIZ / nome
         if origem.is_file():
             shutil.copy2(origem, payload / nome)
@@ -85,6 +92,8 @@ def montar(destino: Path) -> Path:
 
     # 5. Testes viajam junto: permitem revalidar a instalação na máquina do escritório
     shutil.copytree(RAIZ / "tests", destino / "tests", ignore=IGNORAR)
+    if (RAIZ / "pytest.ini").is_file():
+        shutil.copy2(RAIZ / "pytest.ini", destino / "pytest.ini")
 
     # 6. Scripts do instalador na raiz
     for arq in sorted((RAIZ / "installer").iterdir()):
