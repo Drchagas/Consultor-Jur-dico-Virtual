@@ -1,5 +1,40 @@
-JARBAS Juridico Enterprise 9.2.0
+JARBAS Juridico Enterprise 9.3.0
 =================================
+
+O QUE MUDOU DESDE A 9.2.0
+
+CHATBOT PUBLICO DE ATENDIMENTO
+- Nova pagina /atendimento e balao de chat nas telas publicas do sistema
+  (login, sem workspace) — a UNICA superficie do JARBAS acessivel sem
+  login. Fala em nome do escritorio, faz triagem inicial e, com aceite
+  explicito do visitante, cria um lead comum no CRM, sob revisao humana.
+- Fica de fora, de proposito, de /produto e /signup: essas telas vendem o
+  JARBAS como plataforma para OUTROS escritorios, e o balao fala em nome
+  do CHAGAS - ADVOGADOS.
+- Nunca consulta cliente, processo ou documento algum — garantia por
+  arquitetura (o modulo nao tem SQL para essas tabelas), nao promessa.
+  Nunca da parecer juridico nem cita jurisprudencia.
+- Erro tecnico da IA nunca chega cru ao visitante; sem chave configurada
+  ou com o teto de gasto mensal PROPRIO do chatbot estourado
+  (JARBAS_CHATBOT_TETO_USD_MES, menor que o teto geral do sistema — e a
+  unica porta sem fechadura de login), cai para resposta roteirizada em
+  vez de falhar.
+- Rate limit por hash de IP (nunca o IP em claro) para sessoes novas,
+  mensagens E contatos deixados, mais teto de mensagens por sessao e teto
+  de tokens de saida por resposta.
+- Desligar o chatbot em Configuracoes agora vale tambem para conversa ja
+  aberta, nao so trava sessao nova.
+- Um token de sessao gera no maximo um lead (idempotente): reenvio do
+  formulario de contato nao duplica nem vira vetor de flood no CRM.
+- Organizacao do chatbot resolvida por slug configuravel
+  (JARBAS_CHATBOT_ORG_SLUG). Slug sem correspondencia falha visivel (nao
+  adivinha outro escritorio em instalacao multiescritorio).
+- Painel para a equipe em CRM > Conversas do chatbot: transcricao
+  completa, lead gerado, e exclusao da conversa (direito de exclusao da
+  LGPD — o lead, se houver, e preservado).
+- Dashboard avisa quando ha conversa recente sem contato deixado: o
+  sistema nao tem infraestrutura de e-mail/push ainda, entao este e o
+  aviso possivel nesta versao.
 
 O QUE MUDOU DESDE A 9.1.0
 
@@ -130,7 +165,7 @@ TESTES: 386 (eram 284 na 9.0.2), iguais no pytest e no minipytest.
 ATENCAO AO ATUALIZAR
 Apague a pasta extraida da versao anterior antes de extrair esta. Extrair por
 cima ja falhou uma vez: os arquivos nao foram substituidos e a instalacao
-rodou o pacote antigo. O nome da pasta mudou para JARBAS_Instalador_9_2_0,
+rodou o pacote antigo. O nome da pasta mudou para JARBAS_Instalador_9_3_0,
 o que torna a confusao menos provavel.
 
 -----------------------------------------------------------------------

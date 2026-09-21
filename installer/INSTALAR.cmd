@@ -2,13 +2,13 @@
 setlocal
 chcp 65001 >nul
 color 0B
-title JARBAS Juridico Enterprise 9.2.0 - Instalacao
+title JARBAS Juridico Enterprise 9.3.0 - Instalacao
 cd /d "%~dp0"
 
 cls
 echo.
 echo   ------------------------------------------------------------------
-echo    JARBAS JURIDICO ENTERPRISE 9.2.0
+echo    JARBAS JURIDICO ENTERPRISE 9.3.0
 echo    CHAGAS - ADVOGADOS
 echo   ------------------------------------------------------------------
 echo.
@@ -31,9 +31,9 @@ if not exist "%~dp0payload\app" (
   exit /b 90
 )
 
-if not exist "%~dp0INSTALAR_JARBAS_9_2_0.ps1" (
+if not exist "%~dp0INSTALAR_JARBAS_9_3_0.ps1" (
   color 0C
-  echo   [X] O instalador INSTALAR_JARBAS_9_2_0.ps1 nao esta nesta pasta.
+  echo   [X] O instalador INSTALAR_JARBAS_9_3_0.ps1 nao esta nesta pasta.
   echo   Extraia o ZIP novamente, sem selecionar arquivos avulsos.
   echo.
   pause
@@ -42,7 +42,7 @@ if not exist "%~dp0INSTALAR_JARBAS_9_2_0.ps1" (
 
 echo   Tudo certo. A instalacao vai comecar.
 echo.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALAR_JARBAS_9_2_0.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALAR_JARBAS_9_3_0.ps1"
 set RC=%ERRORLEVEL%
 
 echo.
@@ -50,7 +50,7 @@ if "%RC%"=="0" (
   color 0A
   echo   ------------------------------------------------------------------
   echo    PRONTO. O JARBAS esta instalado e ja abriu no navegador.
-  echo    O atalho "JARBAS Juridico 9.2.0" ficou na area de trabalho.
+  echo    O atalho "JARBAS Juridico 9.3.0" ficou na area de trabalho.
   echo   ------------------------------------------------------------------
 ) else (
   color 0C

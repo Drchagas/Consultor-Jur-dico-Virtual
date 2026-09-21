@@ -5,7 +5,7 @@ $Desktop=[Environment]::GetFolderPath('Desktop')
 $Out=Join-Path $Desktop 'JARBAS_DIAGNOSTICO_8_3_0.txt'
 $lines=New-Object System.Collections.Generic.List[string]
 function Add([string]$s){$lines.Add($s)}
-Add 'JARBAS Juridico Enterprise 9.2.0 - Diagnostico'
+Add 'JARBAS Juridico Enterprise 9.3.0 - Diagnostico'
 Add "Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Add "Windows: $([Environment]::OSVersion.VersionString)"
 Add "Root: $Root"
@@ -14,7 +14,7 @@ $EnvFile=Join-Path $Root '.env.local'
 if(Test-Path $Python){try{Add "Python: $(& $Python --version 2>&1)"}catch{Add "Python ERRO: $($_.Exception.Message)"}}else{Add 'Python: AUSENTE'}
 $Pth=Get-ChildItem (Join-Path $Root 'runtime') -Filter 'python*._pth' -ErrorAction SilentlyContinue|Select-Object -First 1
 if($Pth){# O build responde "qual pacote esta instalado?". Sem ele, dois pacotes
-# diferentes se apresentam como 9.2.0 e a pergunta fica sem resposta.
+# diferentes se apresentam como 9.3.0 e a pergunta fica sem resposta.
 $BuildFile=Join-Path $Root 'BUILD.txt'
 if(Test-Path $BuildFile){Add '--- build instalado ---';Get-Content $BuildFile|Select-Object -First 3|ForEach-Object{Add $_}}
 else{Add '--- build instalado ---';Add 'BUILD.txt AUSENTE: instalacao anterior a este controle, ou extracao incompleta.'}
@@ -55,6 +55,6 @@ if(Test-Path $Python){
  try{(& $Python (Join-Path $Root 'tools\diagnose_pdfs.py') 2>&1)|ForEach-Object{Add "$_"}}catch{Add "PDF CHECK ERRO: $($_.Exception.Message)"}
 }
 if($Port){Add "Porta: $Port";try{$r=Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/health" -TimeoutSec 3;Add "Health: HTTP $($r.StatusCode) $($r.Content)"}catch{Add "Health ERRO: $($_.Exception.Message)"};Add '--- netstat ---';(& netstat -ano|Select-String ":$Port")|ForEach-Object{Add $_.Line}}
-foreach($f in @('instalacao-9.2.0.log','bootstrap-admin-9.2.0.log','jarbas-error.log','jarbas-out.log','runtime-errors.log','prestart-import.log')){Add "--- $f ---";$p=Join-Path $Root "logs\$f";if(Test-Path $p){Get-Content $p -Tail 350|ForEach-Object{Add $_}}else{Add '(ausente)'}}
+foreach($f in @('instalacao-9.3.0.log','bootstrap-admin-9.3.0.log','jarbas-error.log','jarbas-out.log','runtime-errors.log','prestart-import.log')){Add "--- $f ---";$p=Join-Path $Root "logs\$f";if(Test-Path $p){Get-Content $p -Tail 350|ForEach-Object{Add $_}}else{Add '(ausente)'}}
 [IO.File]::WriteAllLines($Out,$lines,[Text.UTF8Encoding]::new($true))
 Start-Process notepad.exe $Out

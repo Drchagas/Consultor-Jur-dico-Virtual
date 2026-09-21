@@ -1,4 +1,4 @@
-JARBAS JURIDICO ENTERPRISE 9.2.0
+JARBAS JURIDICO ENTERPRISE 9.3.0
 CHAGAS - ADVOGADOS
 
 ========================================================================
