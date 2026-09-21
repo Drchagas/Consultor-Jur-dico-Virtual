@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">Site · atendimento automático</span><h1>Conversas do chatbot</h1><p>Quem falou com o JARBAS no site, antes de virar cliente.</p></div>
+<a class="button ghost" href="/crm">← Voltar ao CRM</a></div>
+
+<div class="alert {{ 'warning-box' if teto_mes and gasto_mes >= teto_mes else 'success-box' }}">
+Gasto de IA do chatbot este mês: US$ {{ '%.2f'|format(gasto_mes) }}{% if teto_mes %} de US$ {{ '%.2f'|format(teto_mes) }}{% endif %}.
+{% if teto_mes and gasto_mes >= teto_mes %}Teto atingido: o chatbot está respondendo em modo simples (sem IA) até o próximo mês. Ajuste em <code>JARBAS_CHATBOT_TETO_USD_MES</code>, se necessário.{% endif %}
+</div>
+
+{% if not sessoes %}
+<div class="panel"><p class="empty">Nenhuma conversa ainda. O link público é <code>/atendimento</code>, e o balão de chat aparece nas telas de acesso do sistema.</p></div>
+{% else %}
+<section class="panel">
+<div class="chatbot-list">
+<div class="chatbot-row"><b>Visitante</b><b>Mensagens</b><b>Situação</b><b></b></div>
+{% for s in sessoes %}
+<div class="chatbot-row">
+  <div><strong>{{ s['visitor_name'] or 'Ainda não identificado' }}</strong><small>{{ s['visitor_contact'] or '' }}</small><small>{{ s['started_at']|datahora }}</small></div>
+  <div>{{ s['message_count'] }}</div>
+  <div>
+    {% if s['lead_id'] %}<span class="badge baixo">virou lead #{{ s['lead_id'] }}</span>{% elif s['status']=='encerrada' %}<span class="badge medio">encerrada</span>{% else %}<span class="badge alto">em aberto</span>{% endif %}
+  </div>
+  <a class="button mini ghost" href="/crm/chatbot/{{ s['id'] }}">Ver conversa</a>
+</div>
+{% endfor %}
+</div>
+</section>
+{% endif %}
+{% endblock %}

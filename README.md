@@ -17,11 +17,12 @@ Versão em `VERSION.txt`. Contexto técnico do projeto em `CLAUDE.md`.
 5. [Segurança obrigatória com autos reais](#5-segurança-obrigatória-com-autos-reais)
 6. [Backup e restauração](#6-backup-e-restauração)
 7. [Trazer o acervo que já existe](#7-trazer-o-acervo-que-já-existe)
-8. [Operação diária](#8-operação-diária)
-9. [Atualizar](#9-atualizar)
-10. [Quando algo dá errado](#10-quando-algo-dá-errado)
-11. [Desenvolvimento](#11-desenvolvimento)
-12. [LGPD e sigilo profissional](#12-lgpd-e-sigilo-profissional)
+8. [Chatbot público de atendimento](#8-chatbot-público-de-atendimento)
+9. [Operação diária](#9-operação-diária)
+10. [Atualizar](#10-atualizar)
+11. [Quando algo dá errado](#11-quando-algo-dá-errado)
+12. [Desenvolvimento](#12-desenvolvimento)
+13. [LGPD e sigilo profissional](#13-lgpd-e-sigilo-profissional)
 
 ---
 
@@ -294,12 +295,57 @@ Detalhes que importam na prática:
 
 ---
 
-## 8. Operação diária
+## 8. Chatbot público de atendimento
+
+A única rota do sistema acessível **sem login**. Um visitante do site fala
+com o JARBAS, recebe triagem inicial e, se topar, vira um lead no CRM —
+tudo sob revisão humana antes de virar cliente de verdade.
+
+- **Página direta**: `/atendimento` — envie este link no WhatsApp Business,
+  e-mail ou no site do escritório.
+- **Balão de chat**: aparece nas telas públicas do próprio sistema (login,
+  produto, etc.).
+- **Painel da equipe**: *CRM → Conversas do chatbot* (`/crm/chatbot`) lista
+  cada conversa, com transcrição completa e o lead gerado, se houver.
+
+O que ele **nunca** faz, por desenho:
+
+- Não consulta cliente, processo ou documento — as únicas tabelas que toca
+  são as próprias do chatbot e, com aceite explícito do visitante, `leads`.
+- Não dá parecer jurídico, não cita jurisprudência, não promete resultado.
+- Erro técnico da IA nunca aparece cru para o visitante; some para uma
+  mensagem genérica, e o detalhe vai só para o log do servidor.
+- Sem chave de IA configurada, ou com o teto de gasto do mês estourado,
+  cai para uma resposta roteirizada — nunca fica mudo.
+
+Controles:
+
+| Variável | Para quê | Padrão |
+|---|---|---|
+| `JARBAS_CHATBOT_ORG_SLUG` | qual escritório o chatbot representa | `chagas-advogados` |
+| `JARBAS_CHATBOT_TETO_USD_MES` | teto de gasto de IA só do chatbot (menor que o teto geral, de propósito: é a única porta sem login) | `15` |
+
+Ligar/desligar: *Configurações → "Chatbot de atendimento ativo"*.
+
+> **Incorporar no site institucional (domínio diferente deste sistema)**
+> exigiria liberar CORS para a origem externa — uma decisão de segurança à
+> parte, não incluída nesta versão. Por ora, use o link direto de
+> `/atendimento`.
+
+> **Publicidade e captação de causa** têm regras próprias do Código de
+> Ética da OAB. Revise o texto de `/atendimento` e da persona do chatbot
+> (`ATENDIMENTO_RULES` em `app/chatbot_routes.py`) antes de divulgar
+> amplamente o link.
+
+---
+
+## 9. Operação diária
 
 | Rotina | Onde |
 |---|---|
 | Abrir processo novo a partir do PDF do eproc | *Intake Inteligente* |
 | Trazer pastas de clientes que já existem | *Importar pastas* |
+| Ver conversas do chatbot e leads gerados | *CRM → Conversas do chatbot* |
 | Perguntar aos autos, Hard Truth, minutas | *Copiloto* no processo |
 | Prazos, simulador de contagem | *Prazos* |
 | Honorários, parcelas, despesas, caixa | *Financeiro* |
@@ -311,7 +357,7 @@ sinal de credencial comprometida.
 
 ---
 
-## 9. Atualizar
+## 10. Atualizar
 
 **Windows**: execute `ATUALIZAR_OU_REPARAR.cmd` do novo pacote. Ele faz backup,
 preserva banco, PDFs, identidade visual e a chave da IA, e reindexa os PDFs
@@ -331,7 +377,7 @@ Migrações de schema são automáticas e não apagam tabela existente.
 
 ---
 
-## 10. Quando algo dá errado
+## 11. Quando algo dá errado
 
 | Sintoma | O que fazer |
 |---|---|
@@ -350,7 +396,7 @@ Guarde o código do erro e o arquivo de diagnóstico antes de tentar consertar.
 
 ---
 
-## 11. Desenvolvimento
+## 12. Desenvolvimento
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
@@ -371,7 +417,7 @@ antes de mexer em `database.py` ou nas rotas.
 
 ---
 
-## 12. LGPD e sigilo profissional
+## 13. LGPD e sigilo profissional
 
 Este sistema guarda processos, documentos e dados pessoais de clientes. Isso
 traz deveres que nenhuma configuração substitui:

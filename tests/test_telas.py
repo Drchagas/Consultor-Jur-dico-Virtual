@@ -144,6 +144,7 @@ TELAS = [
     "/audit", "/team", "/settings", "/settings/2fa", "/billing", "/platform",
     "/intake", "/conselho", "/ai", "/produto", "/health", "/robots.txt",
     "/configurar-ia", "/importar-pastas",
+    "/atendimento", "/crm/chatbot",
     "/search?q=silva",
 ]
 

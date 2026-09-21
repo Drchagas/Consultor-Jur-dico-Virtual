@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block title %}Fale com {{ organization['brand_name'] or organization['name'] }}{% endblock %}
+{% block public_content %}
+<div class="marketing-wrap">
+<header class="marketing-nav"><div class="brand-large">{{ organization['brand_name'] or organization['name'] }}</div><div><a class="text-link" href="/login">Área do escritório</a></div></header>
+<div class="atendimento-hero">
+  <section class="atendimento-info">
+    <span class="eyebrow">Atendimento inicial</span>
+    <h1>Fale com o {{ organization['brand_name'] or organization['name'] }}</h1>
+    <p class="muted">Conte rapidamente sua situação. O JARBAS, nosso assistente virtual, te explica os próximos passos — e a equipe confirma tudo em horário comercial.</p>
+    <div class="feature-list">
+      <div><b>Consulta inicial</b><span>R$ 250,00, abatidos dos honorários em caso de contratação</span></div>
+      <div><b>Horário</b><span>dias úteis, das 8h às 17h</span></div>
+      {% if organization['address'] %}<div><b>Endereço</b><span>{{ organization['address'] }}{% if organization['city'] %}, {{ organization['city'] }}{% endif %}</span></div>{% endif %}
+      {% if organization['phone'] %}<div><b>Telefone</b><span>{{ organization['phone'] }}</span></div>{% endif %}
+    </div>
+    {% if whatsapp %}<a class="button" href="{{ whatsapp }}" target="_blank" rel="noopener">Prefere WhatsApp? Fale agora →</a>{% endif %}
+    <div class="safe-note" style="margin-top:18px">O JARBAS não substitui a análise de um advogado: nada aqui é parecer jurídico. Toda orientação específica do seu caso é dada pela equipe, com os documentos em mãos.</div>
+  </section>
+  <section class="atendimento-widget-card">
+    {% if chatbot_ativo %}
+    <div id="jarbas-chat-root" data-inline="1"></div>
+    <script src="/static/chatbot-widget.js" defer></script>
+    {% else %}
+    <div class="panel"><h2>Atendimento pelo chat indisponível</h2><p class="muted">No momento, fale direto pelo WhatsApp ou telefone acima.</p></div>
+    {% endif %}
+  </section>
+</div>
+<footer>{{ organization['brand_name'] or organization['name'] }} · atendimento inicial via JARBAS</footer>
+</div>
+{% endblock %}

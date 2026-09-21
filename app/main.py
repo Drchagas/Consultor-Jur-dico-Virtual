@@ -2712,6 +2712,7 @@ async def update_workspace_settings(
     website: str = Form(""),
     primary_color: str = Form("#9f2948"),
     timezone: str = Form("America/Sao_Paulo"),
+    chatbot_ativo: str = Form(""),
     logo: UploadFile | None = File(None),
     csrf: str = Form("", alias="_csrf"),
 ):
@@ -2747,11 +2748,12 @@ async def update_workspace_settings(
     with db() as conn:
         conn.execute(
             """UPDATE organizations
-               SET brand_name=?,email=?,phone=?,address=?,city=?,lawyer_name=?,oab_number=?,website=?,primary_color=?,timezone=?,logo_path=?
+               SET brand_name=?,email=?,phone=?,address=?,city=?,lawyer_name=?,oab_number=?,website=?,primary_color=?,timezone=?,logo_path=?,chatbot_ativo=?
                WHERE id=?""",
             (
                 brand_name.strip() or org["name"], email.strip(), phone.strip(), address.strip(), city.strip(), lawyer_name.strip(), oab_number.strip(),
-                website.strip(), primary_color, timezone.strip() or "America/Sao_Paulo", logo_path, org["id"]
+                website.strip(), primary_color, timezone.strip() or "America/Sao_Paulo", logo_path,
+                1 if chatbot_ativo == "1" else 0, org["id"]
             ),
         )
     log_action(request, "Identidade e configurações do workspace atualizadas")
@@ -3058,3 +3060,7 @@ app.include_router(ia_router)
 # JARBAS 9.2 — importação de pastas de clientes (envio e mapeamento).
 from .pasta_routes import router as pasta_router
 app.include_router(pasta_router)
+
+# JARBAS 9.3 — chatbot público de atendimento.
+from .chatbot_routes import router as chatbot_router
+app.include_router(chatbot_router)

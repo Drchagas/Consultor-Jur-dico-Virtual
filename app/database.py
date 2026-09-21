@@ -1315,6 +1315,7 @@ def initialize_schema(conn: Connection) -> None:
     conn.executescript(V88_POSTGRES_EXTRA if IS_POSTGRES else V88_SQLITE_EXTRA)
     conn.executescript(V89_POSTGRES_EXTRA if IS_POSTGRES else V89_SQLITE_EXTRA)
     conn.executescript(V92_POSTGRES_EXTRA if IS_POSTGRES else V92_SQLITE_EXTRA)
+    conn.executescript(V93_POSTGRES_EXTRA if IS_POSTGRES else V93_SQLITE_EXTRA)
     ensure_column(conn, "plans", "ai_tier TEXT")
     ensure_column(conn, "plans", "monthly_ai_usd " + ("DOUBLE PRECISION" if IS_POSTGRES else "REAL"))
     ensure_column(conn, "subscriptions", "provider TEXT")
@@ -1326,6 +1327,8 @@ def initialize_schema(conn: Connection) -> None:
     ensure_column(conn, "organizations", "require_2fa INTEGER")
     for definicao in COLUNAS_DEADLINES:
         ensure_column(conn, "deadlines", definicao)
+    # Chatbot público de atendimento: liga/desliga por escritório.
+    ensure_column(conn, "organizations", "chatbot_ativo INTEGER NOT NULL DEFAULT 1")
 
 
 # --------------------------------------------------------------------------
@@ -1499,4 +1502,80 @@ CREATE TABLE IF NOT EXISTS folder_imports (
 );
 CREATE INDEX IF NOT EXISTS idx_folder_imports_org
     ON folder_imports(organization_id,status,created_at);
+"""
+
+
+# --------------------------------------------------------------------------
+# JARBAS 9.3 — chatbot público de atendimento.
+#
+# Superfície NÃO autenticada: qualquer visitante do site fala com o JARBAS
+# sem login. Por isso estas tabelas nunca guardam CPF/CNPJ nem ligam a um
+# `client_id` — o chatbot não consulta nenhum cadastro real, só recebe o que
+# o próprio visitante digita e, se ele topar, vira um lead comum em `leads`,
+# revisado por gente antes de qualquer coisa. `ip_hash` é hash, não o IP em
+# claro: existe só para limitar abuso, minimização de dados desde o desenho.
+# --------------------------------------------------------------------------
+
+V93_SQLITE_EXTRA = r"""
+CREATE TABLE IF NOT EXISTS chatbot_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    token TEXT NOT NULL,
+    ip_hash TEXT,
+    flow TEXT NOT NULL DEFAULT 'indefinido',
+    visitor_name TEXT,
+    visitor_contact TEXT,
+    lead_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'ativo',
+    message_count INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT NOT NULL,
+    last_message_at TEXT NOT NULL,
+    FOREIGN KEY(organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY(lead_id) REFERENCES leads(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chatbot_sessions_token ON chatbot_sessions(token);
+CREATE INDEX IF NOT EXISTS idx_chatbot_sessions_org ON chatbot_sessions(organization_id,started_at);
+CREATE TABLE IF NOT EXISTS chatbot_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    model TEXT,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY(session_id) REFERENCES chatbot_sessions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_messages_session ON chatbot_messages(organization_id,session_id,id);
+"""
+
+V93_POSTGRES_EXTRA = r"""
+CREATE TABLE IF NOT EXISTS chatbot_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    organization_id BIGINT NOT NULL,
+    token TEXT NOT NULL,
+    ip_hash TEXT,
+    flow TEXT NOT NULL DEFAULT 'indefinido',
+    visitor_name TEXT,
+    visitor_contact TEXT,
+    lead_id BIGINT,
+    status TEXT NOT NULL DEFAULT 'ativo',
+    message_count INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT NOT NULL,
+    last_message_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chatbot_sessions_token ON chatbot_sessions(token);
+CREATE INDEX IF NOT EXISTS idx_chatbot_sessions_org ON chatbot_sessions(organization_id,started_at);
+CREATE TABLE IF NOT EXISTS chatbot_messages (
+    id BIGSERIAL PRIMARY KEY,
+    organization_id BIGINT NOT NULL,
+    session_id BIGINT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    model TEXT,
+    cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chatbot_messages_session ON chatbot_messages(organization_id,session_id,id);
 """

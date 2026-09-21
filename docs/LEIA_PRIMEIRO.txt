@@ -107,6 +107,21 @@ perder processos.
    entao grava. A sua pasta original nao e movida nem apagada — os PDFs
    sao copiados.
 
+6. CHATBOT DE ATENDIMENTO DO SITE (opcional, ja vem ligado).
+   O JARBAS conversa com visitantes do site, SEM LOGIN, na pagina
+   /atendimento e num balao de chat nas telas publicas do sistema. Envie
+   o link /atendimento pelo WhatsApp Business, e-mail ou no site do
+   escritorio.
+
+   O que ele faz: triagem cordial (novo caso ou cliente ja atendido),
+   explica consulta (R$ 250,00, dias uteis das 8h as 17h) e, se a pessoa
+   topar, registra um LEAD no CRM para a equipe confirmar. NUNCA consulta
+   processo ou cadastro de cliente, nunca da parecer juridico, nunca cita
+   jurisprudencia — isso e trabalho do advogado.
+
+   Veja as conversas em CRM > Conversas do chatbot. Para desligar, va em
+   Configuracoes e desmarque "Chatbot de atendimento ativo".
+
 ========================================================================
  QUANDO ALGO DER ERRADO
 ========================================================================

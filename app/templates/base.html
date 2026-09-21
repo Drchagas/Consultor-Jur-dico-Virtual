@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token(request) }}">
   <title>{% block title %}JARBAS Jurídico{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -75,6 +76,14 @@
 </div>
 {% else %}
 <main class="public-shell">{% block public_content %}{% endblock %}</main>
+{% if request.url.path not in ('/atendimento', '/produto', '/signup') %}
+{# /atendimento já mostra o widget embutido; /produto e /signup vendem o
+   JARBAS como plataforma para OUTROS escritórios — o balão fala em nome do
+   CHAGAS – ADVOGADOS, e misturar os dois papéis na mesma tela confundiria
+   quem está ali avaliando o produto, não procurando um advogado. #}
+<div id="jarbas-chat-root" data-inline="0"></div>
+<script src="/static/chatbot-widget.js" defer></script>
+{% endif %}
 {% endif %}
 </body>
 </html>

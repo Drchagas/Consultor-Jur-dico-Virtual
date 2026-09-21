@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">Site · atendimento automático</span><h1>Conversa #{{ sessao['id'] }}</h1><p>{{ sessao['visitor_name'] or 'Visitante não identificado' }}{% if sessao['visitor_contact'] %} · {{ sessao['visitor_contact'] }}{% endif %}</p></div>
+<a class="button ghost" href="/crm/chatbot">← Voltar</a></div>
+
+<div class="grid2 wide-left">
+<section class="panel">
+<h2>Transcrição</h2>
+<div class="transcript">
+{% for m in mensagens %}
+<div class="jarbas-chat-msg {{ 'visitante' if m['role']=='visitor' else 'assistente' }}">{{ m['content'] }}</div>
+{% endfor %}
+</div>
+</section>
+<section class="panel">
+<h2>Detalhes</h2>
+<div class="feature-list">
+<div><b>Início</b><span>{{ sessao['started_at']|datahora }}</span></div>
+<div><b>Última mensagem</b><span>{{ sessao['last_message_at']|datahora }}</span></div>
+<div><b>Mensagens</b><span>{{ sessao['message_count'] }}</span></div>
+<div><b>Situação</b><span>{{ sessao['status'] }}</span></div>
+</div>
+{% if lead %}
+<h3>Lead gerado</h3>
+<p><a class="button ghost" href="/crm">Ver no CRM → lead #{{ lead['id'] }}</a></p>
+{% else %}
+<p class="empty">O visitante ainda não deixou contato.</p>
+{% endif %}
+</section>
+</div>
+{% endblock %}

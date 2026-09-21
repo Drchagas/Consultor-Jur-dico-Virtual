@@ -281,8 +281,14 @@ def test_a_ia_respeita_o_teto_da_execucao(tmp_path, monkeypatch):
         return {"parties": [], "warnings": [], "ai_used": bool(prefer_ai),
                 "number": "", "title": "", "area": "", "court": ""}
 
-    from app import smart_intake
-    monkeypatch.setattr(smart_intake, "detect_case_metadata", falsa)
+    # Remenda no MESMO objeto de módulo que IP._ler_pdf de fato usa
+    # (IP.smart_intake, vinculado quando importador_pastas.py foi
+    # importado), não num `from app import smart_intake` novo em folha.
+    # Outro arquivo de teste que recarregue app.* (há mais de um nesta
+    # suíte) deixa sys.modules['app.smart_intake'] apontando para um objeto
+    # DIFERENTE do que IP já carrega internamente — remendar o errado faz
+    # o teste “passar” sem nunca ter tocado o código de verdade.
+    monkeypatch.setattr(IP.smart_intake, "detect_case_metadata", falsa)
 
     for nome in ("A", "B", "C", "D"):
         (tmp_path / nome).mkdir()
