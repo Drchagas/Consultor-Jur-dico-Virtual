@@ -1340,6 +1340,18 @@ def dashboard(request: Request):
             "cash": snap["cash_balance"],
             "leads": conn.execute("SELECT COUNT(*) c FROM leads WHERE organization_id=? AND status NOT IN ('Contratado','Perdido')", (org["id"],)).fetchone()["c"],
             "tasks": conn.execute("SELECT COUNT(*) c FROM activities WHERE organization_id=? AND status='Pendente'", (org["id"],)).fetchone()["c"],
+            # O chatbot não avisa ninguém quando alguém fala com ele — não há
+            # e-mail nem push no sistema. Isto é o mínimo para o painel não
+            # deixar passar batido um visitante que conversou e não deixou
+            # contato: fica visível aqui até um humano abrir e conferir.
+            # Corte calculado em Python, não com função de data do SQL: o
+            # mesmo motivo de `soon` acima — SQLite e Postgres não falam a
+            # mesma sintaxe de data, e um parâmetro ISO funciona nos dois.
+            "chatbot_sem_retorno": conn.execute(
+                """SELECT COUNT(*) c FROM chatbot_sessions
+                   WHERE organization_id=? AND lead_id IS NULL AND started_at>=?""",
+                (org["id"], (datetime.now() - timedelta(days=2)).isoformat(timespec="seconds")),
+            ).fetchone()["c"],
         }
         deadlines = conn.execute(
             """SELECT d.*,c.title case_title,c.number case_number

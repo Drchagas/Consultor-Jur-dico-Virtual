@@ -2,6 +2,7 @@
 <div class="page-head"><div><span class="eyebrow">Site · atendimento automático</span><h1>Conversas do chatbot</h1><p>Quem falou com o JARBAS no site, antes de virar cliente.</p></div>
 <a class="button ghost" href="/crm">← Voltar ao CRM</a></div>
 
+{% if request.query_params.get('excluida') == '1' %}<div class="alert success-box">Conversa excluída.</div>{% endif %}
 <div class="alert {{ 'warning-box' if teto_mes and gasto_mes >= teto_mes else 'success-box' }}">
 Gasto de IA do chatbot este mês: US$ {{ '%.2f'|format(gasto_mes) }}{% if teto_mes %} de US$ {{ '%.2f'|format(teto_mes) }}{% endif %}.
 {% if teto_mes and gasto_mes >= teto_mes %}Teto atingido: o chatbot está respondendo em modo simples (sem IA) até o próximo mês. Ajuste em <code>JARBAS_CHATBOT_TETO_USD_MES</code>, se necessário.{% endif %}

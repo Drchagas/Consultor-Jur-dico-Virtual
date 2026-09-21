@@ -361,10 +361,20 @@ def _chamar(client, *, model: str, instructions: str, blocos: list[dict],
 
 
 def ask(instructions: str, user_input: str, *, model: str | None = None,
-        profile: str = "legal", reasoning_effort: str | None = None) -> AIResult:
+        profile: str = "legal", reasoning_effort: str | None = None,
+        max_tokens: int | None = None) -> AIResult:
     """reasoning_effort existia na API da OpenAI. Mantido na assinatura para
-    nao quebrar os chamadores; ignorado aqui."""
+    nao quebrar os chamadores; ignorado aqui.
+
+    max_tokens: teto de tokens de SAIDA. Sem ele, usa MAX_TOKENS_SAIDA (16000),
+    pensado para peca juridica longa. Um chamador cujo caso de uso e uma
+    resposta curta — o chatbot publico, por exemplo — deve passar um teto bem
+    menor: sem isso, uma instrucao de "responda em ate 100 palavras" no
+    prompt e so texto, nao um limite de verdade, e uma mensagem manipulada
+    pode custar dezenas de vezes o esperado.
+    """
     return _chamar(_client(), model=model or model_name(profile),
+                   max_tokens=max_tokens if max_tokens else MAX_TOKENS_SAIDA,
                    instructions=instructions,
                    blocos=[{"type": "text", "text": user_input}])
 

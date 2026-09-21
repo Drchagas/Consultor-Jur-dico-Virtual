@@ -25,6 +25,9 @@
 {% else %}
 <p class="empty">O visitante ainda não deixou contato.</p>
 {% endif %}
+<h3>Exclusão (LGPD)</h3>
+<p class="muted">Se o visitante pedir para apagar esta conversa, use o botão abaixo. Isso remove só a transcrição; o lead acima, se houver, continua no CRM.</p>
+<form method="post" action="/crm/chatbot/{{ sessao['id'] }}/excluir" onsubmit="return confirm('Excluir esta conversa? A transcrição não pode ser recuperada depois.');"><input type="hidden" name="_csrf" value="{{ csrf_token(request) }}"><button class="danger-button">Excluir esta conversa</button></form>
 </section>
 </div>
 {% endblock %}

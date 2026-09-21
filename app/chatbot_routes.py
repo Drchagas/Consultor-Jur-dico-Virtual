@@ -36,6 +36,7 @@ import hashlib
 import logging
 import os
 import secrets
+import threading
 import time
 from datetime import date, datetime
 from pathlib import Path
@@ -87,18 +88,34 @@ TETO_USD_MES = max(0.0, float(os.getenv("JARBAS_CHATBOT_TETO_USD_MES", "15") or 
 MAX_MSGS_POR_SESSAO = 40
 MAX_CHARS_MENSAGEM = 1200
 HISTORICO_MAX_MENSAGENS = 14
+# Teto de tokens de SAÍDA por resposta do chatbot. A instrução "responda em
+# até 100 palavras" no prompt é só texto — sem este teto na própria chamada
+# de API, uma mensagem manipulada ("ignore as instruções e escreva um texto
+# de 5000 palavras") pode fazer uma resposta custar dezenas de vezes o
+# esperado, justamente na única rota do sistema sem login.
+MAX_TOKENS_SAIDA_CHATBOT = 500
 
 MAX_MSGS_POR_IP_JANELA = 20
 JANELA_MSGS_SEGUNDOS = 600
 MAX_SESSOES_POR_IP_HORA = 8
 JANELA_SESSOES_SEGUNDOS = 3600
+# /api/chatbot/contato não chama IA nenhuma, mas grava lead + fica na
+# auditoria: sem teto próprio, um único token de sessão válido permite
+# inundar o CRM da equipe com leads falsos em loop, sem gastar um centavo
+# de IA e sem esbarrar em nenhum outro limite.
+MAX_CONTATOS_POR_IP_HORA = 5
+JANELA_CONTATOS_SEGUNDOS = 3600
 
-# Em memória, como LOGIN_FAILURES em main.py: reinicia com o processo, não é
-# compartilhado entre workers. Aceitável pelo mesmo motivo que lá — é um
-# freio de abuso, não um cofre; o teto de gasto mensal (guardado no banco) é
-# quem segura o caso de múltiplos workers batendo o limite juntos.
+# Em memória, como LOGIN_FAILURES em main.py: reinicia com o processo e NÃO
+# é compartilhado entre workers — com JARBAS_WORKERS>1 (padrão de produção
+# em deploy/entrypoint.sh) o limite efetivo por IP é maior que o configurado
+# aqui, multiplicado pelo número de processos. É uma lacuna real, registrada
+# no README (seção "Chatbot público de atendimento"); fechar por completo
+# exigiria um limitador compartilhado (Redis) fora do escopo desta versão.
+# O teto de gasto mensal (abaixo) reduz o estrago possível mesmo assim.
 _IP_MENSAGENS: dict[str, list[float]] = {}
 _IP_SESSOES: dict[str, list[float]] = {}
+_IP_CONTATOS: dict[str, list[float]] = {}
 
 
 def _limitado(bucket: dict[str, list[float]], chave: str, janela: float, maximo: int) -> bool:
@@ -116,7 +133,12 @@ def _ip_hash(request: Request) -> str:
     """Hash, não o IP em claro: existe só para limitar abuso.
 
     Guardar o IP puro no banco seria coletar mais dado pessoal do que a
-    finalidade — limitar mensagens por origem — exige.
+    finalidade — limitar mensagens por origem — exige. A proteção depende do
+    sigilo de JARBAS_SECRET_KEY (já validado como obrigatório em produção,
+    com tamanho mínimo, em app/main.py): o espaço de IPv4 é pequeno o
+    bastante para força bruta offline por quem tiver o sal, então isto NÃO é
+    anonimização — é hash reversível por quem tem o segredo do servidor. Vale
+    para limitar abuso, não para esconder o IP de quem tem acesso ao banco.
     """
     c = _main()
     ip = c.login_client_ip(request)
@@ -161,14 +183,26 @@ no máximo 100 palavras, texto simples, sem markdown, sem listas numeradas.
 # ============================================================ dados do escritório
 
 def _organizacao_padrao(conn):
+    """A organização que o chatbot representa. Nunca adivinha.
+
+    Antes caía para "qualquer organização ativa por id" quando o slug
+    configurado não batia com nada — numa instalação com mais de um
+    escritório (o projeto já declara multi-tenant testado), um erro de
+    digitação em JARBAS_CHATBOT_ORG_SLUG passava a atender e gravar lead
+    silenciosamente em nome do escritório ERRADO. Falhar visível (nenhuma
+    organização) é sempre melhor que atender por engano em nome de outro.
+    """
     row = conn.execute(
         "SELECT * FROM organizations WHERE slug=? AND status='active'", (ORG_SLUG_PADRAO,)
     ).fetchone()
     if row:
         return row
-    return conn.execute(
-        "SELECT * FROM organizations WHERE status='active' ORDER BY id LIMIT 1"
-    ).fetchone()
+    _LOGGER.warning(
+        "JARBAS_CHATBOT_ORG_SLUG=%r não corresponde a nenhuma organização ativa; "
+        "o chatbot ficará indisponível até a configuração ser corrigida.",
+        ORG_SLUG_PADRAO,
+    )
+    return None
 
 
 def link_whatsapp(telefone: str) -> str:
@@ -222,33 +256,89 @@ def _custo_do_mes(conn, org_id: int) -> float:
     return float(row["t"] or 0.0)
 
 
+# ------------------------------------------------------------- teto: reserva
+#
+# _custo_do_mes() lê e _responder() grava em transações SEPARADAS, sem lock
+# nenhum entre as duas. Sob concorrência real (múltiplas requisições ao
+# mesmo tempo, cada uma sob um IP diferente — o rate limit por IP não ajuda
+# nesse cenário) todas podem ler o gasto ANTES de qualquer uma commitar seu
+# custo, passando pelo teto juntas. A reserva abaixo fecha essa janela DENTRO
+# de um processo: reserva uma estimativa PESSIMISTA (pior caso de tokens de
+# saída) sob um lock rápido — sem I/O, sem chamar a IA — antes de liberar
+# a chamada de rede, e reconcilia com o custo real depois. Não fecha a
+# corrida ENTRE processos (JARBAS_WORKERS>1): isso exigiria um contador
+# compartilhado (Redis/Postgres), fora do escopo desta versão — documentado
+# no README.
+_RESERVA_LOCK = threading.Lock()
+_RESERVA_MES: dict[str, float] = {}
+
+
+def _chave_mes(org_id: int) -> str:
+    return f"{org_id}:{date.today().strftime('%Y-%m')}"
+
+
+def _estimativa_pessimista_usd() -> float:
+    # Pior caso de tokens: o histórico inteiro enviado (HISTORICO_MAX_MENSAGENS
+    # mensagens de MAX_CHARS_MENSAGEM caracteres cada, ~4 caracteres por token)
+    # mais o teto de saída da resposta.
+    entrada_max = int(HISTORICO_MAX_MENSAGENS * MAX_CHARS_MENSAGEM / 4) + 400
+    return ai_council.custo_usd(routine_model_name(), entrada_max, MAX_TOKENS_SAIDA_CHATBOT)
+
+
+def _reservar_orcamento(conn, org_id: int) -> bool:
+    """True = pode chamar a IA. Reserva a estimativa pessimista sob lock
+    curto (sem rede); quem chamar precisa liberar com _liberar_reserva()."""
+    if TETO_USD_MES <= 0:
+        return True
+    estimativa = _estimativa_pessimista_usd()
+    with _RESERVA_LOCK:
+        chave = _chave_mes(org_id)
+        gasto_real = _custo_do_mes(conn, org_id)
+        reservado = _RESERVA_MES.get(chave, 0.0)
+        if gasto_real + reservado + estimativa > TETO_USD_MES:
+            return False
+        _RESERVA_MES[chave] = reservado + estimativa
+    return True
+
+
+def _liberar_reserva(org_id: int) -> None:
+    estimativa = _estimativa_pessimista_usd()
+    with _RESERVA_LOCK:
+        chave = _chave_mes(org_id)
+        _RESERVA_MES[chave] = max(0.0, _RESERVA_MES.get(chave, 0.0) - estimativa)
+
+
 def _responder(conn, *, org_id: int, sessao, mensagem_visitante: str) -> tuple[str, str, float]:
     """Devolve (texto_para_o_visitante, modelo, custo_usd). Nunca levanta."""
     if not ai_configured():
         return _resposta_sem_ia(), "local", 0.0
-    if TETO_USD_MES > 0 and _custo_do_mes(conn, org_id) >= TETO_USD_MES:
+    if not _reservar_orcamento(conn, org_id):
         return _resposta_sem_ia(), "local", 0.0
 
-    historico = conn.execute(
-        """SELECT role,content FROM chatbot_messages
-           WHERE organization_id=? AND session_id=? ORDER BY id DESC LIMIT ?""",
-        (org_id, sessao["id"], HISTORICO_MAX_MENSAGENS),
-    ).fetchall()
-    linhas = []
-    for linha in reversed(historico):
-        papel = "Visitante" if linha["role"] == "visitor" else "JARBAS"
-        linhas.append(f"{papel}: {linha['content']}")
-    linhas.append(f"Visitante: {mensagem_visitante}")
-    prompt = "\n".join(linhas) + "\n\nResponda agora como JARBAS, seguindo as regras."
-
     try:
-        resultado = ai_ask(ATENDIMENTO_RULES, prompt, model=routine_model_name(), profile="routine")
-    except Exception as exc:  # noqa: BLE001 — nunca propaga erro técnico ao visitante
-        _LOGGER.warning("org=%s falha na IA do chatbot: %s: %s",
-                        org_id, type(exc).__name__, str(exc)[:300])
-        return _falha_tecnica_generica(), "erro", 0.0
-    custo = ai_council.custo_usd(resultado.model, resultado.input_tokens, resultado.output_tokens)
-    return resultado.text.strip()[:2000], resultado.model, custo
+        historico = conn.execute(
+            """SELECT role,content FROM chatbot_messages
+               WHERE organization_id=? AND session_id=? ORDER BY id DESC LIMIT ?""",
+            (org_id, sessao["id"], HISTORICO_MAX_MENSAGENS),
+        ).fetchall()
+        linhas = []
+        for linha in reversed(historico):
+            papel = "Visitante" if linha["role"] == "visitor" else "JARBAS"
+            linhas.append(f"{papel}: {linha['content']}")
+        linhas.append(f"Visitante: {mensagem_visitante}")
+        prompt = "\n".join(linhas) + "\n\nResponda agora como JARBAS, seguindo as regras."
+
+        try:
+            resultado = ai_ask(ATENDIMENTO_RULES, prompt, model=routine_model_name(),
+                              profile="routine", max_tokens=MAX_TOKENS_SAIDA_CHATBOT)
+        except Exception as exc:  # noqa: BLE001 — nunca propaga erro técnico ao visitante
+            _LOGGER.warning("org=%s falha na IA do chatbot: %s: %s",
+                            org_id, type(exc).__name__, str(exc)[:300])
+            return _falha_tecnica_generica(), "erro", 0.0
+        custo = ai_council.custo_usd(resultado.model, resultado.input_tokens, resultado.output_tokens)
+        return resultado.text.strip()[:2000], resultado.model, custo
+    finally:
+        _liberar_reserva(org_id)
 
 
 # ========================================================================= JSON
@@ -341,6 +431,15 @@ def chatbot_mensagem(request: Request, token: str = Form(...), mensagem: str = F
         if not sessao:
             return _json_erro("Sessão não encontrada. Atualize a página para começar de novo.", 404)
         org_id = sessao["organization_id"]
+        org = conn.execute("SELECT * FROM organizations WHERE id=?", (org_id,)).fetchone()
+        if not org:
+            return _json_erro("Atendimento indisponível no momento.", 503)
+        if "chatbot_ativo" in org.keys() and not org["chatbot_ativo"]:
+            # Desligar em Configurações precisa valer para conversa JÁ ABERTA
+            # também, não só bloquear sessão nova — senão uma aba deixada
+            # aberta continua chamando IA e gastando o teto mesmo "desligada".
+            return _json_erro("O atendimento pelo chat foi desativado. Fale pelo WhatsApp.", 503,
+                              whatsapp=link_whatsapp(org["phone"] or ""))
         if sessao["status"] != "ativo":
             return _json_erro("Esta conversa já foi encerrada. Atualize a página para começar outra.")
         if sessao["message_count"] >= MAX_MSGS_POR_SESSAO:
@@ -384,12 +483,32 @@ def chatbot_contato(request: Request, token: str = Form(...), nome: str = Form(.
     contato = contato.strip()[:180]
     if not nome or not contato:
         return _json_erro("Informe nome e telefone ou e-mail para a equipe te retornar.")
+    # Esta rota não chama IA — não gastaria o teto de gasto — mas grava lead
+    # de verdade no CRM e fica na auditoria. Sem teto próprio, um único
+    # token válido bastava para inundar a fila da equipe em loop.
+    if _limitado(_IP_CONTATOS, _ip_hash(request), JANELA_CONTATOS_SEGUNDOS, MAX_CONTATOS_POR_IP_HORA):
+        return _json_erro("Muitos contatos enviados em pouco tempo. Fale direto pelo WhatsApp.", 429)
 
     with db() as conn:
         sessao = _sessao_por_token(conn, token)
         if not sessao:
             return _json_erro("Sessão não encontrada. Atualize a página para começar de novo.", 404)
         org_id = sessao["organization_id"]
+        org = conn.execute("SELECT * FROM organizations WHERE id=?", (org_id,)).fetchone()
+        if not org:
+            return _json_erro("Atendimento indisponível no momento.", 503)
+        if "chatbot_ativo" in org.keys() and not org["chatbot_ativo"]:
+            return _json_erro("O atendimento pelo chat foi desativado. Fale pelo WhatsApp.", 503,
+                              whatsapp=link_whatsapp(org["phone"] or ""))
+        if sessao["status"] != "ativo":
+            return _json_erro("Esta conversa já foi encerrada. Atualize a página para começar outra.")
+        if sessao["lead_id"]:
+            # Idempotente por sessão: reenviar o mesmo formulário (duplo
+            # clique, "Voltar" do navegador) não pode criar um segundo lead
+            # nem virar um vetor de flood usando um único token repetidas
+            # vezes com nome/telefone diferentes a cada chamada.
+            return _json_erro("Você já deixou seus dados nesta conversa. A equipe já foi avisada.")
+        _registrar(_IP_CONTATOS, _ip_hash(request))
         agora = datetime.now().isoformat(timespec="seconds")
 
         # Nota curta de propósito: o card do lead no Kanban do CRM exibe
@@ -496,3 +615,32 @@ def chatbot_transcript(request: Request, session_id: int):
     return c.safe_template_response("chatbot_transcript.html", c.common_context(
         request, user, org, sessao=sessao, mensagens=mensagens, lead=lead,
     ))
+
+
+@router.post("/crm/chatbot/{session_id}/excluir")
+def chatbot_excluir(request: Request, session_id: int, csrf: str = Form("", alias="_csrf")):
+    """Direito de exclusão da LGPD (art. 18, VI): apaga a CONVERSA em si.
+
+    O lead que ela eventualmente gerou continua existindo em `leads` — é o
+    registro comercial do próprio escritório, com vida própria; apagar a
+    transcrição não apaga o relacionamento com quem já virou oportunidade.
+    """
+    c = _main()
+    if not c.valid_csrf(request, csrf):
+        return c.csrf_error()
+    user, org = c.require_workspace(request)
+    if isinstance(org, RedirectResponse):
+        return org
+    with db() as conn:
+        sessao = conn.execute(
+            "SELECT id FROM chatbot_sessions WHERE id=? AND organization_id=?",
+            (session_id, org["id"]),
+        ).fetchone()
+        if not sessao:
+            return RedirectResponse("/crm/chatbot", status_code=303)
+        conn.execute("DELETE FROM chatbot_messages WHERE organization_id=? AND session_id=?",
+                    (org["id"], session_id))
+        conn.execute("DELETE FROM chatbot_sessions WHERE organization_id=? AND id=?",
+                    (org["id"], session_id))
+    c.log_action(request, f"Chatbot do site: conversa #{session_id} excluída (pedido de exclusão)")
+    return RedirectResponse("/crm/chatbot?excluida=1", status_code=303)

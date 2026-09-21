@@ -49,7 +49,7 @@
   painel.className = "jarbas-chat-painel" + (inline ? " inline" : "");
   painel.innerHTML =
     '<div class="jarbas-chat-cab">' +
-      '<strong>Atendimento</strong><span class="jarbas-chat-sub">Resposta em instantes</span>' +
+      '<strong>Atendimento</strong><span class="jarbas-chat-sub">Assistente virtual</span>' +
       (inline ? "" : '<button type="button" class="jarbas-chat-fechar" aria-label="Fechar">✕</button>') +
     "</div>" +
     '<div class="jarbas-chat-corpo" role="log" aria-live="polite"></div>' +
@@ -146,8 +146,16 @@
     iniciando = true;
     enviarFormulario("/api/chatbot/iniciar", {}, function (err, res) {
       iniciando = false;
-      if (err || !res.ok) {
+      if (err) {
         bolhaMsg("assistant", "Não consegui abrir o atendimento agora. Tente novamente em instantes.");
+        return;
+      }
+      if (!res.ok) {
+        // Lê a mensagem específica do servidor (ex.: chat desativado, limite
+        // de novas conversas atingido) em vez de um genérico "tente de novo"
+        // que não explica nada e nunca mostra o WhatsApp já calculado.
+        bolhaMsg("assistant", (res.corpo && res.corpo.erro) || "Não consegui abrir o atendimento agora.");
+        if (res.corpo && res.corpo.whatsapp) mostrarWhats(res.corpo.whatsapp);
         return;
       }
       token = res.corpo.token;

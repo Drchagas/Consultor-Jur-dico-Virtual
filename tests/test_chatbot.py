@@ -122,14 +122,20 @@ def navegador(sistema):
 
         def post(self, caminho, dados):
             corpo = dict(dados)
-            corpo.setdefault("_csrf", self.token())
+            if "_csrf" not in corpo:
+                corpo["_csrf"] = self.token()  # avaliação preguiçosa: só busca se falta
             return laco.run_until_complete(cliente.post(caminho, data=corpo))
 
         def entrar_como_equipe(self):
             corpo = self.get("/login").text
             tok = re.search(r'name="_csrf" value="([^"]+)"', corpo).group(1)
-            return laco.run_until_complete(cliente.post(
+            resposta = laco.run_until_complete(cliente.post(
                 "/login", data={"email": EMAIL, "password": SENHA, "_csrf": tok}))
+            # abrir_sessao() gira o _csrf da sessão no login (proteção contra
+            # fixação de sessão) — o token público cacheado antes de entrar
+            # fica inválido; força buscar um novo na próxima escrita.
+            self._csrf = None
+            return resposta
 
         def iniciar_conversa(self):
             r = self.post("/api/chatbot/iniciar", {})
@@ -462,3 +468,186 @@ def test_atendimento_nao_duplica_o_widget(navegador):
     nav, _ = navegador
     r = nav.get("/atendimento")
     assert r.text.count('id="jarbas-chat-root"') == 1
+
+
+# ================================================== correções da revisão adversarial
+
+def test_contato_repetido_na_mesma_sessao_nao_cria_dois_leads(navegador):
+    """Idempotência por sessão: reenvio (duplo clique, "Voltar" do navegador)
+    não pode duplicar o lead nem virar vetor de flood com um único token."""
+    nav, sistema = navegador
+    token = nav.iniciar_conversa()
+    r1 = nav.post("/api/chatbot/contato", {"token": token, "nome": "Bruno", "contato": "bruno@ex.br"})
+    assert r1.status_code == 200
+    r2 = nav.post("/api/chatbot/contato", {"token": token, "nome": "Bruno de Novo", "contato": "outro@ex.br"})
+    assert r2.status_code == 400
+    with sistema.db() as conn:
+        total = conn.execute("SELECT COUNT(*) c FROM leads").fetchone()["c"]
+    assert total == 1
+
+
+def test_rate_limit_proprio_do_contato_impede_flood_sem_gastar_ia(navegador, monkeypatch):
+    """Achado da revisão: /contato não tinha teto nenhum — um único token
+    bastava para inundar o CRM em loop, sem custar um centavo de IA."""
+    import app.chatbot_routes as CB
+    monkeypatch.setattr(CB, "MAX_CONTATOS_POR_IP_HORA", 2)
+    nav, sistema = navegador
+    for i in range(2):
+        token = nav.iniciar_conversa()
+        r = nav.post("/api/chatbot/contato", {"token": token, "nome": f"Pessoa {i}", "contato": f"{i}@ex.br"})
+        assert r.status_code == 200
+    token = nav.iniciar_conversa()
+    r = nav.post("/api/chatbot/contato", {"token": token, "nome": "Excedente", "contato": "x@ex.br"})
+    assert r.status_code == 429
+    with sistema.db() as conn:
+        total = conn.execute("SELECT COUNT(*) c FROM leads").fetchone()["c"]
+    assert total == 2
+
+
+def test_contato_em_sessao_encerrada_e_recusado(navegador):
+    nav, _ = navegador
+    token = nav.iniciar_conversa()
+    nav.post("/api/chatbot/encerrar", {"token": token})
+    r = nav.post("/api/chatbot/contato", {"token": token, "nome": "Alguém", "contato": "a@ex.br"})
+    assert r.status_code == 400
+
+
+def test_desativar_o_chatbot_tambem_bloqueia_conversa_ja_aberta(navegador):
+    """Achado da revisão: chatbot_ativo=0 só travava /iniciar. Uma aba já
+    aberta continuava mandando mensagem e gerando lead com o chat 'desligado'."""
+    nav, sistema = navegador
+    token = nav.iniciar_conversa()
+    with sistema.db() as conn:
+        conn.execute("UPDATE organizations SET chatbot_ativo=0 WHERE slug='chagas-advogados'")
+
+    r = nav.post("/api/chatbot/mensagem", {"token": token, "mensagem": "ainda dá pra falar?"})
+    assert r.status_code == 503
+    assert r.json().get("whatsapp", "").startswith("https://wa.me/")
+
+    r = nav.post("/api/chatbot/contato", {"token": token, "nome": "Visitante", "contato": "v@ex.br"})
+    assert r.status_code == 503
+    with sistema.db() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM leads").fetchone()["c"] == 0
+
+
+def test_slug_sem_organizacao_correspondente_nunca_atende_por_outra(navegador, monkeypatch, sistema):
+    """Achado da revisão: um slug errado caía silenciosamente para 'qualquer
+    organização ativa' — em instalação multiescritório, isso mistura dados
+    de um escritório com o de outro. Agora tem de falhar visível."""
+    import app.chatbot_routes as CB
+    with sistema.db() as conn:
+        conn.execute(
+            "INSERT INTO organizations (name,slug,status,created_at) VALUES (?,?,?,?)",
+            ("Outro Escritório", "outro-escritorio", "active", "2026-01-01T00:00:00"))
+    nav, _ = navegador
+    csrf = nav.token()  # pega o token ANTES de derrubar /atendimento (que deixa de servi-lo)
+    monkeypatch.setattr(CB, "ORG_SLUG_PADRAO", "slug-que-nao-existe")
+
+    r = nav.get("/atendimento")
+    assert r.status_code == 503
+    r = nav.post("/api/chatbot/iniciar", {"_csrf": csrf})
+    assert r.status_code == 503
+    with sistema.db() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM chatbot_sessions").fetchone()["c"] == 0
+
+
+def test_a_resposta_da_ia_tem_teto_proprio_de_tokens_de_saida(navegador, monkeypatch):
+    """Achado da revisão: sem max_tokens próprio, a instrução 'responda em
+    até 100 palavras' era só texto — uma mensagem manipulada podia inflar o
+    custo em dezenas de vezes."""
+    import app.chatbot_routes as CB
+    from app.ai_gateway import AIResult
+
+    recebido = {}
+
+    def fake_ask(instructions, prompt, *, model=None, profile="legal", max_tokens=None):
+        recebido["max_tokens"] = max_tokens
+        return AIResult(text="ok", model="claude-haiku-4-5-20251001", input_tokens=10, output_tokens=5)
+
+    monkeypatch.setattr(CB, "ai_configured", lambda: True)
+    monkeypatch.setattr(CB, "ai_ask", fake_ask)
+    nav, _ = navegador
+    token = nav.iniciar_conversa()
+    nav.post("/api/chatbot/mensagem", {"token": token, "mensagem": "teste"})
+    assert recebido["max_tokens"] == CB.MAX_TOKENS_SAIDA_CHATBOT
+    assert recebido["max_tokens"] < 1000, "teto de saída do chatbot não pode ser o mesmo de uma petição"
+
+
+def test_reserva_de_orcamento_bloqueia_segunda_chamada_antes_da_primeira_commitar(sistema):
+    """A janela de corrida que a revisão apontou: duas requisições lendo o
+    mesmo gasto ANTES de qualquer uma gravar. A reserva em memória fecha essa
+    janela sem precisar esperar a chamada de IA (que nem é feita aqui)."""
+    import app.chatbot_routes as CB
+    monkeypatch_teto = CB.TETO_USD_MES
+    try:
+        CB.TETO_USD_MES = 0.00001  # qualquer estimativa já estoura
+        with sistema.db() as conn:
+            org = conn.execute("SELECT id FROM organizations WHERE slug='chagas-advogados'").fetchone()
+            assert CB._reservar_orcamento(conn, org["id"]) is False
+    finally:
+        CB.TETO_USD_MES = monkeypatch_teto
+
+
+def test_reserva_e_liberada_apos_a_resposta_para_nao_travar_o_teto_para_sempre(sistema):
+    import app.chatbot_routes as CB
+    with sistema.db() as conn:
+        org = conn.execute("SELECT id FROM organizations WHERE slug='chagas-advogados'").fetchone()
+        assert CB._reservar_orcamento(conn, org["id"]) is True
+        chave = CB._chave_mes(org["id"])
+        assert CB._RESERVA_MES.get(chave, 0.0) > 0
+        CB._liberar_reserva(org["id"])
+        assert CB._RESERVA_MES.get(chave, 0.0) == 0.0
+
+
+def test_o_widget_le_o_erro_e_o_whatsapp_reais_ao_iniciar():
+    """Antes, qualquer falha de /iniciar (inclusive chat desativado) virava
+    um genérico 'tente de novo' que nunca mostrava o WhatsApp já calculado."""
+    fonte = (RAIZ / "app" / "static" / "chatbot-widget.js").read_text(encoding="utf-8")
+    assert "res.corpo && res.corpo.erro" in fonte
+    assert "res.corpo && res.corpo.whatsapp" in fonte
+
+
+def test_o_widget_nao_promete_resposta_instantanea():
+    fonte = (RAIZ / "app" / "static" / "chatbot-widget.js").read_text(encoding="utf-8")
+    assert "Resposta em instantes" not in fonte
+
+
+def test_equipe_pode_excluir_uma_conversa(navegador):
+    nav, sistema = navegador
+    token = nav.iniciar_conversa()
+    nav.post("/api/chatbot/mensagem", {"token": token, "mensagem": "mensagem a apagar depois"})
+    with sistema.db() as conn:
+        sessao_id = conn.execute("SELECT id FROM chatbot_sessions ORDER BY id DESC LIMIT 1").fetchone()["id"]
+
+    nav.entrar_como_equipe()
+    r = nav.post(f"/crm/chatbot/{sessao_id}/excluir", {})
+    assert r.status_code in (200, 303)
+    with sistema.db() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM chatbot_sessions WHERE id=?", (sessao_id,)).fetchone()["c"] == 0
+        assert conn.execute("SELECT COUNT(*) c FROM chatbot_messages WHERE session_id=?", (sessao_id,)).fetchone()["c"] == 0
+
+
+def test_excluir_a_conversa_preserva_o_lead_ja_gerado(navegador):
+    """Apagar a transcrição não pode apagar o registro comercial do lead —
+    são coisas diferentes, com ciclos de vida diferentes."""
+    nav, sistema = navegador
+    token = nav.iniciar_conversa()
+    r = nav.post("/api/chatbot/contato", {"token": token, "nome": "Fica", "contato": "fica@ex.br"})
+    lead_id = r.json()["lead_id"]
+    with sistema.db() as conn:
+        sessao_id = conn.execute("SELECT id FROM chatbot_sessions ORDER BY id DESC LIMIT 1").fetchone()["id"]
+
+    nav.entrar_como_equipe()
+    nav.post(f"/crm/chatbot/{sessao_id}/excluir", {})
+    with sistema.db() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM leads WHERE id=?", (lead_id,)).fetchone()["c"] == 1
+
+
+def test_dashboard_avisa_sobre_conversas_sem_retorno(navegador):
+    nav, sistema = navegador
+    token = nav.iniciar_conversa()
+    nav.post("/api/chatbot/mensagem", {"token": token, "mensagem": "alguém aí?"})
+
+    nav.entrar_como_equipe()
+    r = nav.get("/")
+    assert "sem contato deixado" in r.text
